@@ -17,7 +17,15 @@
   reachy-mini-daemon --sim --headless --no-media --no-preload-datasets
   ```
   Use `--no-headless` (drop `--headless`) to open the MuJoCo viewer for demos.
-- Audio is handled **in-app** (laptop mic via sounddevice + macOS `say`), not via the daemon.
+- Audio is handled **in-app** via a backend (`io_backends.py`):
+  - **LocalBackend** (sim/dev): laptop mic (sounddevice VAD) + macOS `say`/espeak.
+  - **RobotBackend** (demo, Wireless): robot onboard mic/speaker/camera via `ReachyMini.media`
+    (`start_recording`/`get_audio_sample`, `play_sound`, `get_frame`) + **antenna push-to-talk**.
+    Speech is synthesized on-device with **Piper** (`tts.py`); set `PIPER_MODEL`. 0G has no TTS.
+- **Demo station = Reachy Mini Wireless**, app runs ON the Pi (Install to Robot from HF Space).
+  Robot needs internet to reach `compute-network-*.integratenetwork.work`. Tune
+  `MR_ANTENNA_THRESHOLD` (rad). RobotBackend is **not yet tested on physical hardware** —
+  unknowns: antenna press threshold, whether `media.play_sound` blocks, mic samplerate.
 
 ## 0G Compute (mainnet, chain 16661)
 - Secrets live in `.env` (gitignored). Three services, each its own host + `app-sk-` key.
