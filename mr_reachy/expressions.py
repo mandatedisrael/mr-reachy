@@ -91,3 +91,18 @@ REST = create_head_pose(mm=True, degrees=True)
 
 def _pose(frame: Frame):
     return create_head_pose(mm=True, degrees=True, **frame.head)
+
+
+def play(reachy, emotion: str, stop_event: threading.Event | None = None) -> None:
+    """Play a named gesture sequence. Blocks until finished (or stop_event set)."""
+    frames = GESTURES.get(emotion, GESTURES["neutral"])
+    for frame in frames:
+        if stop_event is not None and stop_event.is_set():
+            break
+        reachy.goto_target(
+            head=_pose(frame), antennas=list(frame.antennas), duration=frame.duration
+        )
+
+
+def go_rest(reachy, duration: float = 0.4) -> None:
+    reachy.goto_target(head=REST, antennas=[0.0, 0.0], duration=duration)
