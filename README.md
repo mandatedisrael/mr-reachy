@@ -96,7 +96,19 @@ with `--on-robot` when driving a robot from your machine.
 > ⚠️ The on-robot I/O path is built against the SDK API but has **not been tested
 > on a physical robot yet**. Rehearse before the slot and tune the two values below.
 
-**1. Speech — install Piper on the robot** (0G has no TTS provider):
+**1. 0G keys on the robot** — your `.env` is gitignored and does **not** travel with
+the published app, and the framework injects no secrets. So the app would run but
+never reach 0G. SSH into the robot and drop your keys where `config.py` looks for them:
+
+```bash
+# on the robot (over SSH):
+mkdir -p ~/.config/mr_reachy
+nano ~/.config/mr_reachy/.env        # paste the OG_CHAT_* / OG_STT_* lines from your local .env
+```
+(Alternatively point `MR_REACHY_ENV` at a keys file.) Keep keys off the public Space —
+publish with `--private` if you ever bake config in.
+
+**2. Speech — install Piper on the robot** (0G has no TTS provider):
 
 ```bash
 pip install "mr-reachy[robot]"          # piper-tts + pillow
