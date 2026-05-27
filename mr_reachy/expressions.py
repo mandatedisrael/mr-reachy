@@ -106,3 +106,37 @@ def play(reachy, emotion: str, stop_event: threading.Event | None = None) -> Non
 
 def go_rest(reachy, duration: float = 0.4) -> None:
     reachy.goto_target(head=REST, antennas=[0.0, 0.0], duration=duration)
+
+
+def listening_pose(reachy) -> None:
+    """Lean in slightly with antennas perked — 'I'm listening'."""
+    reachy.goto_target(
+        head=create_head_pose(mm=True, degrees=True, pitch=-6, z=6),
+        antennas=[0.4, 0.4],
+        duration=0.5,
+    )
+
+
+def talk_animation(reachy, stop_event: threading.Event, fps: float = 8.0) -> None:
+    """Subtle head bob + antenna flicker while speaking.
+
+    Runs until stop_event is set (typically when TTS playback finishes).
+    Uses goto_target with short durations so it stays responsive to the stop.
+    """
+    period = 1.0 / fps
+    phase = 0.0
+    while not stop_event.is_set():
+        phase += 0.6
+        bob = 4.0 * random.uniform(0.6, 1.0)  # mm
+        pitch = -3.0 + 3.0 * random.uniform(-1, 1)
+        yaw = 4.0 * random.uniform(-1, 1)
+        a = 0.25 + 0.2 * random.uniform(0, 1)
+        reachy.goto_target(
+            head=create_head_pose(mm=True, degrees=True, z=bob, pitch=pitch, yaw=yaw),
+            antennas=[a, -a],
+            duration=period,
+        )
+        # goto_target blocks ~period; tiny guard in case it returns early.
+        if stop_event.wait(0):
+            break
+    go_rest(reachy, duration=0.3)
