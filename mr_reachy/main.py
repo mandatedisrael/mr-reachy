@@ -84,3 +84,85 @@ def capture_frame(reachy) -> bytes | None:
         return buf.getvalue()
     except Exception:
         return None
+
+
+def handle_turn(reachy, og, history: list[dict], user_text: str, *, voice, speak) -> Reply:
+    """Run one full think+react turn for the given user utterance."""
+    user_text = user_text.strip()
+    history.append({"role": "user", "content": user_text})
+
+    # Optional vision: only if the user asked AND a vision provider is funded.
+    if _VISION_INTENT.search(user_text) and getattr(og, "vision_enabled", False):
+        frame = capture_frame(reachy)
+        if frame is not None:
+            try:
+                seen = og.describe(frame, prompt="Briefly describe what you see for a friendly robot.")
+                history.append({"role": "system", "content": f"[Camera] {seen}"})
+            except Exception as exc:  # vision misconfigured / provider error
+                history.append({"role": "system", "content": f"[Camera unavailable: {exc}]"})
+
+    reply = og.chat(history)
+    history.append({"role": "assistant", "content": reply.speech})
+    # Trim history to keep prompts small/cheap.
+    if len(history) > _MAX_HISTORY_TURNS * 2:
+        del history[: len(history) - _MAX_HISTORY_TURNS * 2]
+
+    print(f"  Mr Reachy [{reply.emotion}]: {reply.speech}")
+    express_and_speak(reachy, reply, voice=voice, speak=speak)
+    return reply
+
+
+def run_conversation(
+    reachy,
+    stop_event: threading.Event,
+    *,
+    og,
+    mode: str = "voice",
+    voice: str | None = None,
+    speak: bool = True,
+) -> None:
+    """The main loop. mode='voice' uses the mic; mode='text' reads stdin."""
+    reachy.wake_up()
+    expressions.go_rest(reachy)
+    history: list[dict] = []
+
+    greeting = Reply(speech="Hi, I'm Mr Reachy, running on the 0G network. What's up?", emotion="happy")
+    print(f"  Mr Reachy [{greeting.emotion}]: {greeting.speech}")
+    express_and_speak(reachy, greeting, voice=voice, speak=speak)
+
+    while not stop_event.is_set():
+        if mode == "text":
+            try:
+                user_text = input("\nYou> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if user_text.lower() in {"quit", "exit", "bye"}:
+                break
+            if not user_text:
+                continue
+        else:  # voice
+            expressions.listening_pose(reachy)
+            print("\n(listening… speak now)")
+            wav = audio.record_until_silence()
+            if wav is None:
+                continue
+            user_text = og.transcribe(wav)
+            print(f"You (heard)> {user_text}")
+            if not user_text:
+                continue
+            if user_text.lower().strip(".!? ") in {"quit", "exit", "bye", "goodbye"}:
+                break
+
+        try:
+            handle_turn(reachy, og, history, user_text, voice=voice, speak=speak)
+        except Exception as exc:
+            print(f"  [error] {exc}")
+            express_and_speak(
+                reachy,
+                Reply(speech="Hmm, my brain hiccuped. Try again?", emotion="confused"),
+                voice=voice,
+                speak=speak,
+            )
+
+    expressions.go_rest(reachy)
+    print("\nMr Reachy: bye!")
