@@ -110,3 +110,36 @@ class OGClient:
                 pass
         # Fall back to the raw text if the model didn't emit clean JSON.
         return Reply(speech=text.strip(), emotion="neutral")
+
+    # -- speech to text -----------------------------------------------------
+    def transcribe(self, wav_path: str) -> str:
+        if self._stt is None:
+            raise RuntimeError("STT service is not configured (check OG_STT_* in .env).")
+        with open(wav_path, "rb") as fh:
+            resp = self._stt.audio.transcriptions.create(
+                model=self.settings.stt.model, file=fh
+            )
+        return (getattr(resp, "text", "") or "").strip()
+
+    # -- vision -------------------------------------------------------------
+    def describe(self, image_bytes: bytes, prompt: str = "Briefly describe what you see.") -> str:
+        if self._vision is None:
+            raise RuntimeError(
+                "Vision service is not configured — fund a vision sub-account and set "
+                "OG_VISION_* in .env to enable it."
+            )
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        resp = self._vision.chat.completions.create(
+            model=self.settings.vision.model,
+            max_tokens=200,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    ],
+                }
+            ],
+        )
+        return (resp.choices[0].message.content or "").strip()
