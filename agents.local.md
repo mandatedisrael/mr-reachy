@@ -46,8 +46,9 @@ env -u VIRTUAL_ENV .venv/bin/reachy-mini-app-assistant check .
 ```
 With that, the app passes all checks (entry point `mr-reachy = mr_reachy.main:MrReachy`).
 
-## Quick test (offline, no spend)
+## Quick test (real 0G, no robot daemon required)
 ```bash
 source .venv/bin/activate
-python -m mr_reachy --mock --once "I am so happy" --no-speak
+python -m mr_reachy --health-check --no-robot
+python -m mr_reachy --once "I am so happy" --no-robot --no-speak
 ```
