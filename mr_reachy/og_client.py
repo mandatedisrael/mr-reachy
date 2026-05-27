@@ -79,3 +79,34 @@ class OGClient:
     @property
     def vision_enabled(self) -> bool:
         return self._vision is not None
+
+    # -- chat ---------------------------------------------------------------
+    def chat(self, history: list[dict], *, temperature: float = 0.8) -> Reply:
+        """history: list of {"role","content"} turns (without the system prompt)."""
+        if self._chat is None:
+            raise RuntimeError("Chat service is not configured (check OG_CHAT_* in .env).")
+        messages = [{"role": "system", "content": f"{PERSONALITY} {_RESPONSE_FORMAT}"}, *history]
+        resp = self._chat.chat.completions.create(
+            model=self.settings.chat.model,
+            messages=messages,
+            max_tokens=300,
+            temperature=temperature,
+        )
+        return self._parse(resp.choices[0].message.content or "")
+
+    @staticmethod
+    def _parse(text: str) -> Reply:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+                speech = str(data.get("speech", "")).strip()
+                emotion = str(data.get("emotion", "neutral")).strip().lower()
+                if emotion not in EMOTIONS:
+                    emotion = "neutral"
+                if speech:
+                    return Reply(speech=speech, emotion=emotion)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Fall back to the raw text if the model didn't emit clean JSON.
+        return Reply(speech=text.strip(), emotion="neutral")
