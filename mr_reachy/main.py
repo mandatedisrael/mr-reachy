@@ -177,3 +177,44 @@ class MrReachy(ReachyMiniApp):
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         og = OGClient(load_settings())
         run_conversation(reachy_mini, stop_event, og=og, mode="voice", speak=True)
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
+def _build_client(mock: bool):
+    if mock:
+        return MockOGClient()
+    settings = load_settings()
+    og = OGClient(settings)
+    if not og.chat_enabled:
+        raise SystemExit("Chat not configured. Set OG_CHAT_* in .env (or use --mock).")
+    return og
+
+
+def cli(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="mr-reachy", description="Mr Reachy — 0G companion for Reachy Mini")
+    parser.add_argument("--text", action="store_true", help="type messages instead of using the mic")
+    parser.add_argument("--once", metavar="MSG", help="run a single exchange with MSG, then exit")
+    parser.add_argument("--mock", action="store_true", help="offline: no 0G calls (canned replies)")
+    parser.add_argument("--no-speak", action="store_true", help="don't play TTS audio")
+    parser.add_argument("--voice", help="TTS voice name (e.g. macOS 'Samantha')")
+    args = parser.parse_args(argv)
+
+    og = _build_client(args.mock)
+    speak = not args.no_speak
+    stop_event = threading.Event()
+
+    with ReachyMini() as reachy:
+        if args.once is not None:
+            reachy.wake_up()
+            expressions.go_rest(reachy)
+            handle_turn(reachy, og, [], args.once, voice=args.voice, speak=speak)
+            expressions.go_rest(reachy)
+            return
+        mode = "text" if (args.text or args.mock) else "voice"
+        run_conversation(reachy, stop_event, og=og, mode=mode, voice=args.voice, speak=speak)
+
+
+if __name__ == "__main__":
+    cli()
