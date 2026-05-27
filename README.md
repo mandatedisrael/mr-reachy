@@ -69,13 +69,16 @@ reachy-mini-daemon --sim --no-media          # add --headless to skip the 3D vie
 **2. Talk to Mr Reachy:**
 
 ```bash
-# Offline smoke test — no 0G calls, no audio, just motion + parsing:
-python -m mr_reachy --mock --text --no-speak
+# Check real 0G config without needing the robot/sim daemon:
+python -m mr_reachy --health-check --no-robot
 
-# Single live exchange (spends a little 0G):
+# Single real 0G exchange without needing the robot/sim daemon:
+python -m mr_reachy --once "Tell me a robot joke" --no-robot --no-speak
+
+# Single real 0G exchange with robot/sim motion:
 python -m mr_reachy --once "Tell me a robot joke"
 
-# Type at it (robot still moves + speaks):
+# Type at it with robot/sim motion + local speech:
 python -m mr_reachy --text
 
 # Full voice conversation (needs a mic):
