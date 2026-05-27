@@ -21,6 +21,8 @@ dependencies = [
 
 [project.optional-dependencies]
 mujoco = ["reachy-mini[mujoco]==1.7.3"]
+# On-robot extras: Piper TTS (offline speech) + Pillow (encode camera frames).
+robot = ["piper-tts>=1.2", "pillow>=10.0"]
 
 [project.scripts]
 mr-reachy = "mr_reachy.main:cli"
