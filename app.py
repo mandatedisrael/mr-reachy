@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import gradio as gr
+from openai import OpenAIError
 
 from mr_reachy.config import load_settings
 from mr_reachy.og_client import OGClient
@@ -52,7 +53,12 @@ def chat(message: str, history: list) -> str:
 
     turns = _history_for_og(history)
     turns.append({"role": "user", "content": message})
-    reply = client.chat(turns)
+    try:
+        reply = client.chat(turns)
+    except OpenAIError as exc:
+        return f"0G chat request failed: {exc}"
+    except Exception as exc:
+        return f"Mr Reachy hit an unexpected chat error: {exc}"
     return f"{reply.speech}\n\nEmotion: {reply.emotion}"
 
 
@@ -66,7 +72,12 @@ def transcribe(audio_path: str | None) -> str:
             "0G speech-to-text is not configured yet. Add the OG_STT_* secrets "
             "in the Space settings."
         )
-    return client.transcribe(audio_path)
+    try:
+        return client.transcribe(audio_path)
+    except OpenAIError as exc:
+        return f"0G speech-to-text request failed: {exc}"
+    except Exception as exc:
+        return f"Mr Reachy hit an unexpected speech-to-text error: {exc}"
 
 
 def describe(image_path: str | None) -> str:
@@ -81,7 +92,12 @@ def describe(image_path: str | None) -> str:
         )
 
     image_bytes = Path(image_path).read_bytes()
-    return client.describe(image_bytes, prompt="Briefly describe what you see for a friendly robot.")
+    try:
+        return client.describe(image_bytes, prompt="Briefly describe what you see for a friendly robot.")
+    except OpenAIError as exc:
+        return f"0G vision request failed: {exc}"
+    except Exception as exc:
+        return f"Mr Reachy hit an unexpected vision error: {exc}"
 
 
 with gr.Blocks(title="Mr Reachy") as demo:
@@ -95,11 +111,6 @@ with gr.Blocks(title="Mr Reachy") as demo:
         fn=chat,
         title="Talk to Mr Reachy",
         description="Chat calls 0G from the Space backend, so API keys stay private.",
-        examples=[
-            "Introduce yourself in one sentence.",
-            "Tell me a tiny robot joke.",
-            "What makes you a 0G-powered robot?",
-        ],
     )
 
     with gr.Tab("Speech-to-text"):
