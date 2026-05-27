@@ -166,3 +166,14 @@ def run_conversation(
 
     expressions.go_rest(reachy)
     print("\nMr Reachy: bye!")
+
+
+# --------------------------------------------------------------------------- #
+# Published Reachy Mini app
+# --------------------------------------------------------------------------- #
+class MrReachy(ReachyMiniApp):
+    """All-in-one 0G companion, runnable from the Reachy Mini dashboard."""
+
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
+        og = OGClient(load_settings())
+        run_conversation(reachy_mini, stop_event, og=og, mode="voice", speak=True)
