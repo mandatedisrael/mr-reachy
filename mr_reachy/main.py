@@ -193,6 +193,9 @@ def cli(argv: list[str] | None = None) -> None:
     parser.add_argument("--no-speak", action="store_true", help="don't play TTS audio")
     parser.add_argument("--on-robot", action="store_true",
                         help="use the robot's onboard mic/speaker/camera + antenna push-to-talk")
+    parser.add_argument("--host", help="connect to a robot daemon at this hostname/IP "
+                        "(e.g. reachy-mini.local or 192.168.1.42); omit to auto-detect a local daemon")
+    parser.add_argument("--port", type=int, default=8000, help="daemon port (default: 8000)")
     parser.add_argument("--voice", help="local TTS voice name (e.g. macOS 'Samantha')")
     args = parser.parse_args(argv)
 
@@ -201,7 +204,9 @@ def cli(argv: list[str] | None = None) -> None:
     speak = not args.no_speak
     stop_event = threading.Event()
 
-    with ReachyMini() as reachy:
+    # Explicit host => connect over the network to that robot; else auto-detect.
+    conn = {"host": args.host, "port": args.port, "connection_mode": "network"} if args.host else {}
+    with ReachyMini(**conn) as reachy:
         if args.once is not None:
             reachy.wake_up()
             expressions.go_rest(reachy)
