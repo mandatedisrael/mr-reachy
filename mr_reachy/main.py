@@ -50,3 +50,37 @@ class MockOGClient:
 
     def describe(self, image_bytes, prompt="?"):  # pragma: no cover
         return "(mock) I see a cozy room."
+
+
+# --------------------------------------------------------------------------- #
+# Core behaviours
+# --------------------------------------------------------------------------- #
+def express_and_speak(reachy, reply: Reply, *, voice: str | None, speak: bool) -> None:
+    """Play the emotion gesture, then speak with a synchronized talking wobble."""
+    expressions.play(reachy, reply.emotion)
+    if not speak or not reply.speech:
+        expressions.go_rest(reachy)
+        return
+    _proc, done = audio.speak_async(reply.speech, voice=voice)
+    # Animate the head/antennas until speech playback finishes.
+    expressions.talk_animation(reachy, done)
+
+
+def capture_frame(reachy) -> bytes | None:
+    """Best-effort single camera frame as JPEG bytes (None if no camera)."""
+    try:
+        import io
+
+        import numpy as np
+        from PIL import Image  # optional; only needed for vision
+
+        media = getattr(reachy, "media", None)
+        frame = getattr(media, "last_frame", None) if media is not None else None
+        if frame is None:
+            return None
+        img = Image.fromarray(np.asarray(frame))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception:
+        return None
