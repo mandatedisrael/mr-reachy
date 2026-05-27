@@ -25,17 +25,24 @@ def _status() -> str:
     return " | ".join(parts)
 
 
-def _history_for_og(history: list[dict[str, str]]) -> list[dict[str, str]]:
+def _history_for_og(history: list) -> list[dict[str, str]]:
     turns: list[dict[str, str]] = []
     for item in history[-12:]:
-        role = item.get("role")
-        content = item.get("content", "")
-        if role in {"user", "assistant"} and content:
-            turns.append({"role": role, "content": content})
+        if isinstance(item, dict):
+            role = item.get("role")
+            content = item.get("content", "")
+            if role in {"user", "assistant"} and content:
+                turns.append({"role": role, "content": content})
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            user_msg, assistant_msg = item[0], item[1]
+            if user_msg:
+                turns.append({"role": "user", "content": str(user_msg)})
+            if assistant_msg:
+                turns.append({"role": "assistant", "content": str(assistant_msg)})
     return turns
 
 
-def chat(message: str, history: list[dict[str, str]]) -> str:
+def chat(message: str, history: list) -> str:
     client = _build_client()
     if not client.chat_enabled:
         return (
@@ -86,7 +93,6 @@ with gr.Blocks(title="Mr Reachy") as demo:
 
     gr.ChatInterface(
         fn=chat,
-        type="messages",
         title="Talk to Mr Reachy",
         description="Chat calls 0G from the Space backend, so API keys stay private.",
         examples=[
