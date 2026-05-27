@@ -15,6 +15,7 @@ LocalBackend for sim/dev (laptop mic + TTS), RobotBackend for the Wireless robot
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import threading
 from contextlib import nullcontext
@@ -119,10 +120,32 @@ def run_conversation(
             expressions.listening_pose(reachy)
             print("\n(listening… press an antenna / speak now)" if backend.name == "robot"
                   else "\n(listening… speak now)")
-            wav = backend.capture(reachy)
+            try:
+                wav = backend.capture(reachy)
+            except Exception as exc:
+                print(f"  [listen error] {exc}")
+                express_and_speak(
+                    reachy,
+                    Reply(speech="I could not hear through this audio path yet.", emotion="confused"),
+                    backend=backend,
+                    voice=voice,
+                    speak=speak,
+                )
+                continue
             if wav is None:
                 continue
-            user_text = og.transcribe(wav)
+            try:
+                user_text = og.transcribe(wav)
+            except Exception as exc:
+                print(f"  [transcribe error] {exc}")
+                express_and_speak(
+                    reachy,
+                    Reply(speech="I heard something, but transcription failed.", emotion="confused"),
+                    backend=backend,
+                    voice=voice,
+                    speak=speak,
+                )
+                continue
             print(f"You (heard)> {user_text}")
             if not user_text:
                 continue
@@ -152,9 +175,22 @@ def run_conversation(
 class MrReachy(ReachyMiniApp):
     """All-in-one 0G companion, runnable from the Reachy Mini dashboard."""
 
+    def __init__(self, running_on_wireless: bool = False) -> None:
+        super().__init__(running_on_wireless=running_on_wireless)
+        self.running_on_wireless = running_on_wireless
+
+    def _backend(self):
+        choice = os.getenv("MR_REACHY_BACKEND", "auto").strip().lower()
+        if choice == "local":
+            return LocalBackend()
+        if choice == "robot":
+            return RobotBackend()
+        return RobotBackend() if self.running_on_wireless else LocalBackend()
+
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         og = OGClient(load_settings())
-        backend = RobotBackend()  # onboard mic/speaker/camera + antenna push-to-talk
+        backend = self._backend()
+        print(f"Mr Reachy backend: {backend.name}")
         run_conversation(reachy_mini, stop_event, og=og, backend=backend, mode="voice", speak=True)
 
 

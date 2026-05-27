@@ -113,8 +113,9 @@ Say "bye" / type `quit` to exit.
 At the demo station the app runs **on the robot's Pi**, started from the dashboard
 for a short slot. On hardware Mr Reachy uses the robot's **onboard mic, speaker
 and camera** (via the daemon media manager) and **antenna push-to-talk** instead
-of the laptop mic — selected automatically by `RobotBackend` when published, or
-with `--on-robot` when driving a robot from your machine.
+of the laptop mic. In the desktop simulator, the dashboard app uses the laptop
+mic/speaker path automatically. Override with `MR_REACHY_BACKEND=robot` or
+`MR_REACHY_BACKEND=local` if the SDK guesses wrong.
 
 > ⚠️ The on-robot I/O path is built against the SDK API but has **not been tested
 > on a physical robot yet**. Rehearse before the slot and tune the two values below.
