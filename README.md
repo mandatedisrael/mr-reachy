@@ -3,7 +3,8 @@ title: Mr Reachy
 emoji: 🤖
 colorFrom: indigo
 colorTo: purple
-sdk: static
+sdk: gradio
+app_file: app.py
 pinned: false
 tags:
   - reachy_mini
@@ -55,6 +56,25 @@ Each provider needs its **own** host + key (a key is bound to one provider):
 Copy the printed `app-sk-…` token and the `curl` host into the matching
 `OG_CHAT_* / OG_STT_* / OG_VISION_*` block in `.env`.
 **Mainnet = real funds** — each call spends a tiny amount of 0G.
+
+### Hugging Face Space
+
+This repo is a **Gradio Space** so 0G calls run server-side and API keys stay
+private. In the Space settings, add these as **Secrets**:
+
+```text
+OG_CHAT_BASE_URL
+OG_CHAT_MODEL
+OG_CHAT_PROVIDER
+OG_CHAT_API_KEY
+OG_STT_BASE_URL
+OG_STT_MODEL
+OG_STT_PROVIDER
+OG_STT_API_KEY
+```
+
+Add `OG_VISION_*` too once the vision provider is funded. Rebuild the Space after
+changing secrets.
 
 ## Run
 
