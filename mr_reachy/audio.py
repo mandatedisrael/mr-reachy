@@ -78,3 +78,25 @@ def record_until_silence(
     os.close(fd)
     sf.write(path, audio, SAMPLE_RATE, subtype="PCM_16")
     return path
+
+
+def _tts_command(text: str, voice: str | None) -> list[str] | None:
+    if sys.platform == "darwin" and shutil.which("say"):
+        cmd = ["say"]
+        if voice:
+            cmd += ["-v", voice]
+        return [*cmd, text]
+    if shutil.which("espeak-ng"):
+        return ["espeak-ng", text]
+    if shutil.which("espeak"):
+        return ["espeak", text]
+    return None
+
+
+def speak(text: str, voice: str | None = None) -> None:
+    """Blocking TTS playback. Falls back to printing if no engine is available."""
+    cmd = _tts_command(text, voice)
+    if cmd is None:
+        print(f"[TTS unavailable] {text}")
+        return
+    subprocess.run(cmd, check=False)
