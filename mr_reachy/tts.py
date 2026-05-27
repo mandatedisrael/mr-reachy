@@ -19,12 +19,19 @@ import subprocess
 import sys
 import tempfile
 
-PIPER_BIN = os.getenv("PIPER_BIN", "piper")
-PIPER_MODEL = os.getenv("PIPER_MODEL", "")
+def _piper_bin() -> str:
+    return os.getenv("PIPER_BIN", "piper")
+
+
+def _piper_model() -> str:
+    # Read at call time so keys/config dropped on the robot (loaded into the
+    # environment by config.py) are picked up regardless of import order.
+    return os.getenv("PIPER_MODEL", "")
 
 
 def piper_available() -> bool:
-    return bool(shutil.which(PIPER_BIN) and PIPER_MODEL and os.path.exists(PIPER_MODEL))
+    model = _piper_model()
+    return bool(shutil.which(_piper_bin()) and model and os.path.exists(model))
 
 
 def synth_to_wav(text: str) -> str | None:
@@ -42,7 +49,7 @@ def synth_to_wav(text: str) -> str | None:
     if piper_available():
         try:
             subprocess.run(
-                [PIPER_BIN, "--model", PIPER_MODEL, "--output_file", path],
+                [_piper_bin(), "--model", _piper_model(), "--output_file", path],
                 input=text.encode("utf-8"),
                 check=True,
                 stdout=subprocess.DEVNULL,
