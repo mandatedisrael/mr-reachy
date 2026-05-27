@@ -15,8 +15,20 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Load .env from the project root if present. Real env vars take precedence.
-load_dotenv(PROJECT_ROOT / ".env")
+# Find the 0G keys wherever the app runs. On the robot the dashboard launches the
+# installed package, so the project .env isn't present — drop a keys file at
+# ~/.config/mr_reachy/.env (or point MR_REACHY_ENV at one) over SSH instead.
+# Real environment variables always win (load_dotenv never clobbers them); then
+# the first matching file fills the gaps.
+_ENV_CANDIDATES = [
+    os.getenv("MR_REACHY_ENV"),
+    PROJECT_ROOT / ".env",
+    Path.home() / ".config" / "mr_reachy" / ".env",
+    Path.home() / ".mr_reachy.env",
+]
+for _candidate in _ENV_CANDIDATES:
+    if _candidate and Path(_candidate).is_file():
+        load_dotenv(_candidate)
 
 
 @dataclass(frozen=True)
