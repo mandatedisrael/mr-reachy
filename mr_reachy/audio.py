@@ -100,3 +100,26 @@ def speak(text: str, voice: str | None = None) -> None:
         print(f"[TTS unavailable] {text}")
         return
     subprocess.run(cmd, check=False)
+
+
+def speak_async(text: str, voice: str | None = None) -> tuple[subprocess.Popen | None, threading.Event]:
+    """Start TTS in the background. Returns (process, done_event).
+
+    The done_event is set when playback finishes — handy for driving a talking
+    animation that should stop exactly when speech ends.
+    """
+    done = threading.Event()
+    cmd = _tts_command(text, voice)
+    if cmd is None:
+        print(f"[TTS unavailable] {text}")
+        done.set()
+        return None, done
+
+    proc = subprocess.Popen(cmd)
+
+    def _wait():
+        proc.wait()
+        done.set()
+
+    threading.Thread(target=_wait, daemon=True).start()
+    return proc, done
