@@ -238,8 +238,7 @@ def parse_medication_instruction(text: str, og=None, now: datetime | None = None
     if data.get("needs_start_time"):
         return MedicationParseResult(
             False,
-            f"Got it. I can set up {data['medication_name']} for {data['duration_days']} days, "
-            f"{data['frequency_per_day']} times daily. What time is your first dose?",
+            "Got it, so when are you planning to start the medication?",
         )
 
     advisory = _advisory_with_og(text, data, og) if og is not None else None

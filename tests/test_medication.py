@@ -39,7 +39,7 @@ class MedicationParsingTest(unittest.TestCase):
         )
 
         self.assertFalse(result.accepted)
-        self.assertIn("What time is your first dose", result.reason)
+        self.assertEqual(result.reason, "Got it, so when are you planning to start the medication?")
 
     def test_three_times_daily_from_start_time_schedules_eight_hourly(self) -> None:
         result = parse_medication_instruction(
