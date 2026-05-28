@@ -234,6 +234,11 @@ def parse_medication_instruction(text: str, og=None, now: datetime | None = None
             "I could not safely understand the medication schedule. Please say the medicine name, times per day, and number of days.",
         )
 
+    advisory = _advisory_with_og(text, data, og) if og is not None else None
+    if advisory:
+        data["advisory_note"] = advisory.get("advisory_note") or data.get("advisory_note") or ""
+        data["advisory_level"] = advisory.get("advisory_level") or data.get("advisory_level") or "routine"
+
     try:
         plan = build_plan(
             raw_instruction=text,
@@ -335,10 +340,8 @@ def _parse_with_og(text: str, og) -> dict[str, Any] | None:
         "advisory_note, advisory_level, reason. "
         "Use accepted=false if the request asks for medical advice, is vague, lacks a medication name, "
         "or lacks frequency/duration. dose_times must be HH:MM strings or an empty list. "
-        "advisory_level must be routine, caution, or cross_check. advisory_note must be a short "
-        "non-prescriptive safety caveat, not medical advice. If the user mentions a risk context "
-        "such as ulcer plus an NSAID like naproxen, advise cross-checking with a doctor or pharmacist "
-        "before taking it while still extracting the reminder."
+        "You may leave advisory_note empty here; a second 0G call will generate medication-specific "
+        "advisory context."
     )
     try:
         raw = og.complete_json(prompt, text, temperature=0.0)
@@ -348,6 +351,43 @@ def _parse_with_og(text: str, og) -> dict[str, Any] | None:
     if not data or data.get("accepted") is False:
         return None
     return data
+
+
+def _advisory_with_og(text: str, data: dict[str, Any], og) -> dict[str, Any] | None:
+    if og is None or not getattr(og, "chat_enabled", False):
+        return None
+    medication_name = str(data.get("medication_name") or "").strip()
+    if not medication_name:
+        return None
+    prompt = (
+        "You generate a short medication reminder advisory for Sam, a reminder-only robot. "
+        "Use general medication knowledge from 0G intelligence and the user's stated context. "
+        "Return ONLY JSON with keys: advisory_level and advisory_note. advisory_level must be "
+        "routine, caution, or cross_check. advisory_note must be one short non-prescriptive caveat "
+        "that helps the user use the medication as instructed, such as follow the label, ask whether "
+        "to take with food, avoid known duplicate-risk categories, or cross-check with a doctor or "
+        "pharmacist when the user's condition/context suggests a known concern. Do not say the drug "
+        "is safe or unsafe. Do not diagnose, prescribe, change dosage, or mention rare exhaustive risks. "
+        "If there is no useful caveat, return routine with an empty advisory_note."
+    )
+    user = (
+        f"Medication: {medication_name}\n"
+        f"Frequency per day: {data.get('frequency_per_day')}\n"
+        f"Duration days: {data.get('duration_days')}\n"
+        f"User words: {text}"
+    )
+    try:
+        raw = og.complete_json(prompt, user, temperature=0.0)
+        advisory = _extract_json(raw)
+    except Exception:
+        return None
+    if not advisory:
+        return None
+    level = str(advisory.get("advisory_level") or "routine").strip().lower()
+    note = str(advisory.get("advisory_note") or "").strip()
+    if level not in {"routine", "caution", "cross_check"}:
+        level = "routine"
+    return {"advisory_level": level, "advisory_note": note}
 
 
 def _parse_heuristic(text: str) -> dict[str, Any] | None:

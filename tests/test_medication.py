@@ -10,6 +10,26 @@ from mr_reachy.medication import (
 )
 
 
+class FakeOG:
+    chat_enabled = True
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def complete_json(self, system_prompt: str, user_text: str, *, temperature: float = 0.0) -> str:
+        self.calls.append(system_prompt)
+        if "Extract a medication reminder schedule" in system_prompt:
+            return (
+                '{"accepted": true, "medication_name": "prednisone", '
+                '"frequency_per_day": 1, "duration_days": 5, "dose_times": [], '
+                '"advisory_note": "", "advisory_level": "routine", "reason": "ok"}'
+            )
+        return (
+            '{"advisory_level": "caution", '
+            '"advisory_note": "Small reminder: follow the label exactly and ask your pharmacist whether to take prednisone with food."}'
+        )
+
+
 class MedicationParsingTest(unittest.TestCase):
     def test_three_times_per_day_defaults_to_three_daytime_slots(self) -> None:
         result = parse_medication_instruction(
@@ -69,6 +89,23 @@ class MedicationParsingTest(unittest.TestCase):
         assert result.plan is not None
         self.assertEqual(result.plan.advisory_level, "caution")
         self.assertIn("stomach", result.plan.advisory_note)
+
+    def test_og_advisory_is_not_limited_to_nsaids(self) -> None:
+        og = FakeOG()
+
+        result = parse_medication_instruction(
+            "They gave me prednisone once a day for five days.",
+            og=og,
+            now=datetime(2026, 5, 28, 8, 0).astimezone(),
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIsNotNone(result.plan)
+        assert result.plan is not None
+        self.assertEqual(result.plan.medication_name.lower(), "prednisone")
+        self.assertEqual(result.plan.advisory_level, "caution")
+        self.assertIn("prednisone", result.plan.advisory_note)
+        self.assertEqual(len(og.calls), 2)
 
     def test_confirmation_intent(self) -> None:
         self.assertTrue(is_confirmation_intent("I took it"))
