@@ -1,4 +1,4 @@
-"""Configuration for Mr Reachy's 0G Compute services.
+"""Configuration for Sam's 0G services and local memory.
 
 Secrets and endpoints are read from a project-root ``.env`` (gitignored).
 Each 0G inference provider has its own host + API key (per-provider keys are
@@ -45,6 +45,22 @@ class ServiceConfig:
         return bool(self.base_url and self.api_key and self.model)
 
 
+@dataclass(frozen=True)
+class StorageConfig:
+    """Sam medication memory storage settings."""
+
+    memory_path: str
+    enabled: bool
+    indexer_url: str
+    rpc_url: str
+    private_key: str
+    memory_root: str = ""
+
+    @property
+    def og_ready(self) -> bool:
+        return bool(self.enabled and self.indexer_url and self.rpc_url and self.private_key)
+
+
 def _service(prefix: str) -> ServiceConfig:
     return ServiceConfig(
         base_url=os.getenv(f"OG_{prefix}_BASE_URL", "").strip(),
@@ -59,6 +75,7 @@ class Settings:
     chat: ServiceConfig
     stt: ServiceConfig
     vision: ServiceConfig
+    storage: StorageConfig
 
     @property
     def chat_ready(self) -> bool:
@@ -74,4 +91,13 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    return Settings(chat=_service("CHAT"), stt=_service("STT"), vision=_service("VISION"))
+    default_memory_path = Path.home() / ".config" / "mr_reachy" / "sam_memory.json"
+    storage = StorageConfig(
+        memory_path=os.getenv("SAM_MEMORY_PATH", str(default_memory_path)).strip(),
+        enabled=os.getenv("OG_STORAGE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"},
+        indexer_url=os.getenv("OG_STORAGE_INDEXER_URL", "").strip(),
+        rpc_url=os.getenv("OG_STORAGE_RPC_URL", "").strip(),
+        private_key=os.getenv("OG_STORAGE_PRIVATE_KEY", "").strip(),
+        memory_root=os.getenv("OG_STORAGE_MEMORY_ROOT", "").strip(),
+    )
+    return Settings(chat=_service("CHAT"), stt=_service("STT"), vision=_service("VISION"), storage=storage)

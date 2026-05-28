@@ -17,6 +17,7 @@ dependencies = [
     "sounddevice>=0.5",
     "soundfile>=0.12",
     "numpy",
+    "0g-storage-sdk>=0.3.0",
 ]
 
 [project.optional-dependencies]

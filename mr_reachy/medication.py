@@ -135,6 +135,9 @@ class MedicationMemory:
     plans: list[MedicationPlan] = field(default_factory=list)
     updated_at: str = field(default_factory=lambda: _now_iso())
     og_storage_root: str | None = None
+    pending_sync: bool = False
+    last_synced_at: str | None = None
+    last_sync_error: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "MedicationMemory":
@@ -144,6 +147,9 @@ class MedicationMemory:
             plans=[MedicationPlan.from_dict(item) for item in data.get("plans") or []],
             updated_at=str(data.get("updated_at") or _now_iso()),
             og_storage_root=data.get("og_storage_root"),
+            pending_sync=bool(data.get("pending_sync") or False),
+            last_synced_at=data.get("last_synced_at"),
+            last_sync_error=data.get("last_sync_error"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -151,6 +157,9 @@ class MedicationMemory:
             "plans": [plan.to_dict() for plan in self.plans],
             "updated_at": self.updated_at,
             "og_storage_root": self.og_storage_root,
+            "pending_sync": self.pending_sync,
+            "last_synced_at": self.last_synced_at,
+            "last_sync_error": self.last_sync_error,
         }
 
     def active_pending_doses(self, now: datetime | None = None) -> list[Dose]:
