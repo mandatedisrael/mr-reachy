@@ -25,7 +25,10 @@ from reachy_mini import ReachyMini, ReachyMiniApp
 from . import expressions
 from .config import ServiceConfig, load_settings
 from .io_backends import LocalBackend, RobotBackend, select_backend
+from .medication import is_confirmation_intent, is_medication_intent, parse_medication_instruction, plan_summary
 from .og_client import OGClient, Reply
+from .reminders import confirm_due_dose, start_reminder_thread
+from .storage import HybridMedicationStore, build_medication_store
 
 # Phrases that make Sam try to look and describe the scene (0G vision).
 _VISION_INTENT = re.compile(
@@ -53,9 +56,40 @@ def express_and_speak(reachy, reply: Reply, *, backend, voice: str | None, speak
     expressions.talk_animation(reachy, done)
 
 
-def handle_turn(reachy, og, history: list[dict], user_text: str, *, backend, voice, speak) -> Reply:
+def handle_turn(
+    reachy,
+    og,
+    history: list[dict],
+    user_text: str,
+    *,
+    backend,
+    voice,
+    speak,
+    medication_store: HybridMedicationStore | None = None,
+) -> Reply:
     """Run one full think+react turn for the given user utterance."""
     user_text = user_text.strip()
+
+    if medication_store is not None and is_confirmation_intent(user_text):
+        confirmed, message = confirm_due_dose(medication_store)
+        reply = Reply(speech=message, emotion="happy" if confirmed else "curious")
+        print(f"  Sam [{reply.emotion}]: {reply.speech}")
+        express_and_speak(reachy, reply, backend=backend, voice=voice, speak=speak)
+        return reply
+
+    if medication_store is not None and is_medication_intent(user_text):
+        result = parse_medication_instruction(user_text, og)
+        if result.accepted and result.plan is not None:
+            memory = medication_store.load()
+            memory.plans.append(result.plan)
+            medication_store.save(memory)
+            reply = Reply(speech=plan_summary(result.plan), emotion="happy")
+        else:
+            reply = Reply(speech=result.reason, emotion="confused")
+        print(f"  Sam [{reply.emotion}]: {reply.speech}")
+        express_and_speak(reachy, reply, backend=backend, voice=voice, speak=speak)
+        return reply
+
     history.append({"role": "user", "content": user_text})
 
     # Optional vision: only if the user asked AND a vision provider is funded.
@@ -88,6 +122,7 @@ def run_conversation(
     mode: str = "voice",
     voice: str | None = None,
     speak: bool = True,
+    medication_store: HybridMedicationStore | None = None,
 ) -> None:
     """The main loop. mode='voice' uses the backend mic; mode='text' reads stdin."""
     if reachy is None and mode != "text":
@@ -105,6 +140,14 @@ def run_conversation(
     )
     print(f"  Sam [{greeting.emotion}]: {greeting.speech}")
     express_and_speak(reachy, greeting, backend=backend, voice=voice, speak=speak)
+
+    reminder_thread = None
+    if medication_store is not None:
+        reminder_thread = start_reminder_thread(
+            store=medication_store,
+            stop_event=stop_event,
+            notify=lambda reply: express_and_speak(reachy, reply, backend=backend, voice=voice, speak=speak),
+        )
 
     while not stop_event.is_set():
         if mode == "text":
@@ -153,7 +196,16 @@ def run_conversation(
                 break
 
         try:
-            handle_turn(reachy, og, history, user_text, backend=backend, voice=voice, speak=speak)
+            handle_turn(
+                reachy,
+                og,
+                history,
+                user_text,
+                backend=backend,
+                voice=voice,
+                speak=speak,
+                medication_store=medication_store,
+            )
         except Exception as exc:
             print(f"  [error] {exc}")
             express_and_speak(
@@ -166,6 +218,8 @@ def run_conversation(
 
     if reachy is not None:
         expressions.go_rest(reachy)
+    if reminder_thread is not None:
+        reminder_thread.join(timeout=1.0)
     print("\nSam: bye!")
 
 
@@ -188,10 +242,20 @@ class MrReachy(ReachyMiniApp):
         return RobotBackend() if self.running_on_wireless else LocalBackend()
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
-        og = OGClient(load_settings())
+        settings = load_settings()
+        og = OGClient(settings)
+        medication_store = build_medication_store(settings.storage)
         backend = self._backend()
         print(f"Sam backend: {backend.name}")
-        run_conversation(reachy_mini, stop_event, og=og, backend=backend, mode="voice", speak=True)
+        run_conversation(
+            reachy_mini,
+            stop_event,
+            og=og,
+            backend=backend,
+            mode="voice",
+            speak=True,
+            medication_store=medication_store,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +267,10 @@ def _build_client() -> OGClient:
     if not og.chat_enabled:
         raise SystemExit("Chat not configured. Set OG_CHAT_* in .env.")
     return og
+
+
+def _build_medication_store() -> HybridMedicationStore:
+    return build_medication_store(load_settings().storage)
 
 
 def _service_status(name: str, cfg: ServiceConfig) -> str:
@@ -306,12 +374,30 @@ def cli(argv: list[str] | None = None) -> None:
             if reachy is not None:
                 reachy.wake_up()
                 expressions.go_rest(reachy)
-            handle_turn(reachy, og, [], args.once, backend=backend, voice=args.voice, speak=speak)
+            handle_turn(
+                reachy,
+                og,
+                [],
+                args.once,
+                backend=backend,
+                voice=args.voice,
+                speak=speak,
+                medication_store=_build_medication_store(),
+            )
             if reachy is not None:
                 expressions.go_rest(reachy)
             return
         mode = "text" if args.text else "voice"
-        run_conversation(reachy, stop_event, og=og, backend=backend, mode=mode, voice=args.voice, speak=speak)
+        run_conversation(
+            reachy,
+            stop_event,
+            og=og,
+            backend=backend,
+            mode=mode,
+            voice=args.voice,
+            speak=speak,
+            medication_store=_build_medication_store(),
+        )
 
 
 if __name__ == "__main__":
