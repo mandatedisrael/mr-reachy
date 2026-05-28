@@ -29,8 +29,14 @@ _ENV_CANDIDATES = [
     Path.home() / ".mr_reachy.env",
 ]
 for _candidate in _ENV_CANDIDATES:
-    if _candidate and Path(_candidate).is_file():
-        load_dotenv(_candidate)
+    if not _candidate:
+        continue
+    try:
+        if Path(_candidate).is_file():
+            load_dotenv(_candidate)
+    except OSError:
+        # e.g. PermissionError stat-ing /root/.config/... when running as a non-root user
+        continue
 
 
 @dataclass(frozen=True)
