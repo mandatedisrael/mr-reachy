@@ -1,53 +1,51 @@
-# Mr Reachy — All-in-one 0G AI companion (plan.md)
+# Sam — Medication Reminder Companion (plan.md)
 
 ## Goal
-A **Python on-robot** Reachy Mini app that does it all in one control loop:
+Sam is a **Reachy Mini medication reminder companion** built on the existing 0G robot stack. Sam listens to user-provided pharmacy instructions, creates a simple reminder schedule, saves that memory locally and to 0G Storage, reminds the user when doses are due, and accepts voice confirmation.
 
-1. **Listen** — capture mic audio, transcribe with **0G Whisper** (`openai/whisper-large-v3`).
-2. **See (on request)** — grab a camera frame, describe it with **0G vision** (`qwen/qwen3-vl-30b-a3b-instruct`).
-3. **Think** — reason + reply with personality via **0G chat** (`zai-org/GLM-5-FP8`).
-4. **Speak** — local TTS (macOS `say` in sim / robot speaker on hardware); no TTS provider exists on the 0G marketplace today.
-5. **Express** — head pose (6-DOF Stewart platform) + antennas convey emotion while listening/thinking/talking.
+Sam is a reminder assistant, **not** a medical advisor. It records what the user says the pharmacy or doctor gave them; it does not prescribe, change dosage, verify ingestion, or identify medication as medical truth.
 
-Runs identically in **MuJoCo simulation** (`reachy-mini-daemon --sim`) and on physical hardware.
+## What already works
+1. **Listen** — capture mic audio and transcribe with 0G Whisper (`openai/whisper-large-v3`).
+2. **Think** — reason and reply with 0G chat (`zai-org/GLM-5-FP8`).
+3. **Speak** — local TTS in sim/dev and robot speaker support on hardware.
+4. **Express** — head pose and antennas convey emotion while listening/thinking/talking.
+5. **Run modes** — Hugging Face Gradio demo, local simulator, and Reachy Mini dashboard app.
 
-## 0G Compute access (already configured, mainnet, chain 16661)
-- Account total **4.96 0G**; funded sub-accounts: GLM-5 chat (1.2), Whisper STT (1.4); **1.4 0G** free to fund a vision sub-account.
-- Access pattern: `0g-compute-cli inference get-secret --provider <addr>` → `app-sk-…` key, used with the **OpenAI Python SDK** (`base_url` = provider endpoint, `api_key` = secret).
-- **Mainnet = real funds.** Per-call cost is fractions of a cent, but every test call spends real 0G.
+## What to build
+1. **Medication parsing** — detect medication setup requests and extract safe structured schedules from natural language.
+2. **Hybrid memory** — local JSON as the fast runtime cache plus best-effort 0G Storage sync for durable memory.
+3. **Reminder engine** — background loop checks due doses, speaks reminders, and plays concerned/happy movements.
+4. **Confirmation flow** — user can say “I took it” to mark the active dose complete.
+5. **Missed dose state** — retry up to 3 times, then record the dose as missed for later caregiver escalation.
+6. **Sam rebrand** — user-facing app copy, prompts, docs, and Space UI should say Sam while package names remain stable.
 
-## Open questions / to confirm during validation
-- [ ] Exact OpenAI-compatible **endpoint URL** per provider (from `get-secret` output / `list-providers-detail`). Validate with curl before app code.
-- [ ] Fund a **vision** sub-account (~0.5–1 0G) so the "see" feature works — OK to spend?
-- [ ] TTS: confirm no 0G TTS provider; use local `say` (sim) with a pluggable interface. OK?
+## Storage design
+Local JSON is the source Sam reads during normal operation because reminders must be fast and reliable. 0G Storage is the durable backup/sync layer.
 
-## Architecture
+Environment variables:
+
+```text
+SAM_MEMORY_PATH
+OG_STORAGE_ENABLED
+OG_STORAGE_INDEXER_URL
+OG_STORAGE_RPC_URL
+OG_STORAGE_PRIVATE_KEY
+OG_STORAGE_MEMORY_ROOT
 ```
-mr_reachy/
-  app.py          # ReachyMiniApp subclass: the listen→see→think→speak→express loop
-  og_client.py    # 0G Compute client (OpenAI-compatible): chat / stt / vision
-  expressions.py  # emotion tag -> head pose + antenna gesture (within safety limits)
-  audio.py        # mic capture (VAD) + local TTS playback
-  config.py       # provider addresses, model names, endpoints, secrets from env
-pyproject.toml
-README.md
-.env.example      # OG_* keys (gitignored)
-agents.local.md   # robot/session config (AGENTS.md convention)
-```
 
-## Safety limits (SDK clamps, but we respect them)
-head pitch/roll ±40°, head yaw ±180°, body yaw ±160°, |head−body yaw| ≤ 65°.
+If 0G Storage is unavailable, Sam keeps working from local JSON and logs the sync failure.
 
-## Build steps
-1. Validate 0G creds with curl (chat + STT) — no app code until this passes.
-2. Install `reachy-mini[mujoco]` 1.7.3; start daemon in `--sim`; confirm dashboard at :8000.
-3. Scaffold `ReachyMiniApp` (via `reachy-mini-app-assistant` per AGENTS.md).
-4. Implement `og_client.py` (chat/STT/vision) + a `--text` debug mode that skips audio.
-5. Implement `expressions.py` + wire the control loop in `app.py`.
-6. Implement `audio.py` (mic VAD in, local TTS out).
-7. Test end-to-end in sim; then document hardware run + HF Spaces publish.
+## Demo script
+1. User says: “Sam, I need to take metformin three times a day for five days.”
+2. Sam replies: “I’ll remind you at 9 AM, 2 PM, and 8 PM for five days. Please follow your pharmacist’s instructions.”
+3. At a due time, Sam says: “It’s time for your metformin. Please take it now, then tell me when you have taken it.”
+4. User says: “I took it.”
+5. Sam marks the dose complete, responds happily, and records the confirmation.
 
-## Risks
-- Python **3.14.4** is very new — `reachy-mini[mujoco]`/audio wheels may not have 3.14 builds; may need a 3.11/3.12 venv.
-- Mainnet spend is real (small).
-- Mic/camera in MuJoCo sim are not real devices — text/file fallbacks needed for sim testing.
+## Safety
+- Sam must never invent a medication, dose, or duration.
+- Sam must ask for clearer instructions when the user is vague.
+- Sam must not provide side-effect, interaction, or dosage advice.
+- Vision confirmation is not v1; future vision can confirm visible packaging, not ingestion.
+- Caregiver email is stretch only; missed-dose status is tracked now to support it later.

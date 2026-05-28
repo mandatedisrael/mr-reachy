@@ -1,4 +1,4 @@
-"""Mr Reachy entry point: the conversation loop, the ReachyMiniApp, and a CLI.
+"""Sam entry point: the conversation loop, the ReachyMiniApp, and a CLI.
 
 The same core loop runs three ways:
   * as a published ``ReachyMiniApp`` on the robot (the daemon calls ``MrReachy.run``),
@@ -27,7 +27,7 @@ from .config import ServiceConfig, load_settings
 from .io_backends import LocalBackend, RobotBackend, select_backend
 from .og_client import OGClient, Reply
 
-# Phrases that make Mr Reachy try to look and describe the scene (0G vision).
+# Phrases that make Sam try to look and describe the scene (0G vision).
 _VISION_INTENT = re.compile(
     r"\b(what (do|can) you see|look (at|around)|describe (the|what)|in front of you|see anything)\b",
     re.IGNORECASE,
@@ -74,7 +74,7 @@ def handle_turn(reachy, og, history: list[dict], user_text: str, *, backend, voi
     if len(history) > _MAX_HISTORY_TURNS * 2:
         del history[: len(history) - _MAX_HISTORY_TURNS * 2]
 
-    print(f"  Mr Reachy [{reply.emotion}]: {reply.speech}")
+    print(f"  Sam [{reply.emotion}]: {reply.speech}")
     express_and_speak(reachy, reply, backend=backend, voice=voice, speak=speak)
     return reply
 
@@ -100,10 +100,10 @@ def run_conversation(
 
     hint = " Press an antenna to talk." if backend.name == "robot" else ""
     greeting = Reply(
-        speech=f"Hi, I'm Mr Reachy, running on the 0G network.{hint} What's up?",
+        speech=f"Hi, I'm Sam, your medication reminder companion running on the 0G network.{hint} What's up?",
         emotion="happy",
     )
-    print(f"  Mr Reachy [{greeting.emotion}]: {greeting.speech}")
+    print(f"  Sam [{greeting.emotion}]: {greeting.speech}")
     express_and_speak(reachy, greeting, backend=backend, voice=voice, speak=speak)
 
     while not stop_event.is_set():
@@ -166,7 +166,7 @@ def run_conversation(
 
     if reachy is not None:
         expressions.go_rest(reachy)
-    print("\nMr Reachy: bye!")
+    print("\nSam: bye!")
 
 
 # --------------------------------------------------------------------------- #
@@ -190,7 +190,7 @@ class MrReachy(ReachyMiniApp):
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         og = OGClient(load_settings())
         backend = self._backend()
-        print(f"Mr Reachy backend: {backend.name}")
+        print(f"Sam backend: {backend.name}")
         run_conversation(reachy_mini, stop_event, og=og, backend=backend, mode="voice", speak=True)
 
 
@@ -223,7 +223,7 @@ def run_health_check(*, check_robot: bool, host: str | None, port: int) -> int:
     settings = load_settings()
     og = OGClient(settings)
 
-    print("Mr Reachy health check")
+    print("Sam health check")
     print(f"  {_service_status('Chat', settings.chat)}")
     print(f"  {_service_status('Speech-to-text', settings.stt)}")
     print(f"  {_service_status('Vision', settings.vision)}")
@@ -271,7 +271,7 @@ def run_health_check(*, check_robot: bool, host: str | None, port: int) -> int:
 
 
 def cli(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="mr-reachy", description="Mr Reachy — 0G companion for Reachy Mini")
+    parser = argparse.ArgumentParser(prog="mr-reachy", description="Sam — medication reminder companion for Reachy Mini")
     parser.add_argument("--text", action="store_true", help="type messages instead of listening")
     parser.add_argument("--once", metavar="MSG", help="run a single exchange with MSG, then exit")
     parser.add_argument("--health-check", action="store_true",

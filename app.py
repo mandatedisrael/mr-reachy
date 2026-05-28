@@ -58,7 +58,7 @@ def chat(message: str, history: list) -> str:
     except OpenAIError as exc:
         return f"0G chat request failed: {exc}"
     except Exception as exc:
-        return f"Mr Reachy hit an unexpected chat error: {exc}"
+        return f"Sam hit an unexpected chat error: {exc}"
     return f"{reply.speech}\n\nEmotion: {reply.emotion}"
 
 
@@ -77,7 +77,7 @@ def transcribe(audio_path: str | None) -> str:
     except OpenAIError as exc:
         return f"0G speech-to-text request failed: {exc}"
     except Exception as exc:
-        return f"Mr Reachy hit an unexpected speech-to-text error: {exc}"
+        return f"Sam hit an unexpected speech-to-text error: {exc}"
 
 
 def describe(image_path: str | None) -> str:
@@ -97,19 +97,19 @@ def describe(image_path: str | None) -> str:
     except OpenAIError as exc:
         return f"0G vision request failed: {exc}"
     except Exception as exc:
-        return f"Mr Reachy hit an unexpected vision error: {exc}"
+        return f"Sam hit an unexpected vision error: {exc}"
 
 
-with gr.Blocks(title="Mr Reachy") as demo:
+with gr.Blocks(title="Sam") as demo:
     gr.Markdown(
-        "# Mr Reachy\n"
-        "A server-side Hugging Face demo for the Reachy Mini companion powered by 0G Compute."
+        "# Sam\n"
+        "A server-side Hugging Face demo for the Reachy Mini medication reminder companion powered by 0G Compute."
     )
     gr.Markdown(f"**0G status:** {_status()}")
 
     gr.ChatInterface(
         fn=chat,
-        title="Talk to Mr Reachy",
+        title="Talk to Sam",
         description="Chat calls 0G from the Space backend, so API keys stay private.",
     )
 

@@ -1,5 +1,5 @@
 ---
-title: Mr Reachy
+title: Sam
 emoji: 🤖
 colorFrom: indigo
 colorTo: purple
@@ -11,16 +11,16 @@ tags:
   - reachy_mini_python_app
 ---
 
-# Mr Reachy 🤖
+# Sam
 
-An all-in-one **Reachy Mini** companion that runs its AI brain on the
-**0G decentralized compute network**. One control loop:
+Sam is a **Reachy Mini** medication reminder companion that runs its AI brain on
+the **0G decentralized compute network**. One control loop:
 
 > **listen** (0G Whisper STT) → *optionally* **see** (0G Qwen3-VL) → **think**
 > (0G GLM-5 chat) → **speak** (local TTS) → **express** with head + antennas.
 
-The chat model returns both *what to say* and *how it feels*, so Mr Reachy
-nods, tilts, perks its antennas and bobs while talking.
+The chat model returns both *what to say* and *how it feels*, so Sam nods,
+tilts, perks its antennas and bobs while talking.
 
 Runs identically in **MuJoCo simulation** and on physical hardware.
 
@@ -86,7 +86,7 @@ source .venv/bin/activate
 reachy-mini-daemon --sim --no-media          # add --headless to skip the 3D viewer
 ```
 
-**2. Talk to Mr Reachy:**
+**2. Talk to Sam:**
 
 ```bash
 # Check real 0G config without needing the robot/sim daemon:
@@ -111,7 +111,7 @@ Say "bye" / type `quit` to exit.
 ## On the robot (demo station — Reachy Mini Wireless)
 
 At the demo station the app runs **on the robot's Pi**, started from the dashboard
-for a short slot. On hardware Mr Reachy uses the robot's **onboard mic, speaker
+for a short slot. On hardware Sam uses the robot's **onboard mic, speaker
 and camera** (via the daemon media manager) and **antenna push-to-talk** instead
 of the laptop mic. In the desktop simulator, the dashboard app uses the laptop
 mic/speaker path automatically. Override with `MR_REACHY_BACKEND=robot` or

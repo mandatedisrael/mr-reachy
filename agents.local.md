@@ -1,9 +1,9 @@
-# agents.local.md — Mr Reachy robot & session config
+# agents.local.md — Sam robot & session config
 
 > Read by coding agents (per Pollen's AGENTS.md convention) before working here.
 
 ## App
-- **Name:** Mr Reachy — all-in-one 0G companion (voice + vision + expressive motion).
+- **Name:** Sam — 0G medication reminder companion for Reachy Mini.
 - **Path:** Python on-robot app (`ReachyMiniApp` subclass at `mr_reachy/main.py:MrReachy`).
 - **Plan:** see `plan.md`.
 
