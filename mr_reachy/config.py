@@ -24,6 +24,8 @@ _ENV_CANDIDATES = [
     os.getenv("MR_REACHY_ENV"),
     PROJECT_ROOT / ".env",
     Path.home() / ".config" / "mr_reachy" / ".env",
+    Path("/home/reachy/.config/mr_reachy/.env"),
+    Path("/root/.config/mr_reachy/.env"),
     Path.home() / ".mr_reachy.env",
 ]
 for _candidate in _ENV_CANDIDATES:
@@ -101,3 +103,15 @@ def load_settings() -> Settings:
         memory_root=os.getenv("OG_STORAGE_MEMORY_ROOT", "").strip(),
     )
     return Settings(chat=_service("CHAT"), stt=_service("STT"), vision=_service("VISION"), storage=storage)
+
+
+def env_file_locations() -> list[str]:
+    """Return the env files Sam checks, without exposing any secret values."""
+    locations: list[str] = []
+    for candidate in _ENV_CANDIDATES:
+        if not candidate:
+            continue
+        path = str(Path(candidate).expanduser())
+        if path not in locations:
+            locations.append(path)
+    return locations

@@ -17,13 +17,16 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import sys
 import threading
+import time
+import traceback
 from contextlib import nullcontext
 
 from reachy_mini import ReachyMini, ReachyMiniApp
 
 from . import expressions
-from .config import ServiceConfig, load_settings
+from .config import ServiceConfig, env_file_locations, load_settings
 from .io_backends import LocalBackend, RobotBackend, select_backend
 from .medication import is_confirmation_intent, is_medication_intent, parse_medication_instruction, plan_summary
 from .og_client import OGClient, Reply
@@ -54,6 +57,15 @@ def express_and_speak(reachy, reply: Reply, *, backend, voice: str | None, speak
     done = backend.speak_async(reachy, reply.speech, voice=voice)
     # Animate the head/antennas until speech playback finishes.
     expressions.talk_animation(reachy, done)
+
+
+def _safe_express_and_speak(reachy, reply: Reply, *, backend, voice: str | None = None, speak: bool = True) -> None:
+    """Best-effort robot feedback for startup failures."""
+    try:
+        express_and_speak(reachy, reply, backend=backend, voice=voice, speak=speak)
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        print(f"Sam fallback: {reply.speech}", file=sys.stderr, flush=True)
 
 
 def handle_turn(
@@ -242,20 +254,62 @@ class MrReachy(ReachyMiniApp):
         return RobotBackend() if self.running_on_wireless else LocalBackend()
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
-        settings = load_settings()
-        og = OGClient(settings)
-        medication_store = build_medication_store(settings.storage)
         backend = self._backend()
-        print(f"Sam backend: {backend.name}")
-        run_conversation(
-            reachy_mini,
-            stop_event,
-            og=og,
-            backend=backend,
-            mode="voice",
-            speak=True,
-            medication_store=medication_store,
-        )
+        try:
+            settings = load_settings()
+            print(f"Sam backend: {backend.name}", flush=True)
+            print(f"Sam env search: {', '.join(env_file_locations())}", flush=True)
+            print(
+                "Sam 0G status: "
+                f"chat={'configured' if settings.chat.enabled else 'missing'}; "
+                f"stt={'configured' if settings.stt.enabled else 'missing'}; "
+                f"storage={'configured' if settings.storage.og_ready else 'local-only'}",
+                flush=True,
+            )
+            og = OGClient(settings)
+            medication_store = build_medication_store(settings.storage)
+            if not og.chat_enabled or not og.stt_enabled:
+                missing = []
+                if not og.chat_enabled:
+                    missing.append("OG_CHAT_*")
+                if not og.stt_enabled:
+                    missing.append("OG_STT_*")
+                message = (
+                    "I started, but I cannot talk properly yet. Add "
+                    f"{' and '.join(missing)} to the robot env file, not just Hugging Face secrets."
+                )
+                print(f"Sam setup warning: {message}", file=sys.stderr, flush=True)
+                _safe_express_and_speak(
+                    reachy_mini,
+                    Reply(speech=message, emotion="confused"),
+                    backend=backend,
+                    speak=True,
+                )
+                while not stop_event.wait(1.0):
+                    pass
+                return
+            run_conversation(
+                reachy_mini,
+                stop_event,
+                og=og,
+                backend=backend,
+                mode="voice",
+                speak=True,
+                medication_store=medication_store,
+            )
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            _safe_express_and_speak(
+                reachy_mini,
+                Reply(
+                    speech="Sam crashed during startup. Please open the logs and copy the traceback after the Sam startup error.",
+                    emotion="confused",
+                ),
+                backend=backend,
+                speak=True,
+            )
+            while not stop_event.wait(1.0):
+                time.sleep(0.1)
 
 
 # --------------------------------------------------------------------------- #
