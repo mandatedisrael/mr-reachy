@@ -45,6 +45,31 @@ class MedicationParsingTest(unittest.TestCase):
         self.assertFalse(result.accepted)
         self.assertIsNone(result.plan)
 
+    def test_naproxen_with_ulcer_gets_cross_check_advisory(self) -> None:
+        result = parse_medication_instruction(
+            "I have ulcer and they gave me naproxen twice a day for five days.",
+            now=datetime(2026, 5, 28, 8, 0).astimezone(),
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIsNotNone(result.plan)
+        assert result.plan is not None
+        self.assertEqual(result.plan.medication_name.lower(), "naproxen")
+        self.assertEqual(result.plan.advisory_level, "cross_check")
+        self.assertIn("cross-check", result.plan.advisory_note)
+
+    def test_naproxen_gets_general_stomach_caution(self) -> None:
+        result = parse_medication_instruction(
+            "Take naproxen twice a day for five days.",
+            now=datetime(2026, 5, 28, 8, 0).astimezone(),
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIsNotNone(result.plan)
+        assert result.plan is not None
+        self.assertEqual(result.plan.advisory_level, "caution")
+        self.assertIn("stomach", result.plan.advisory_note)
+
     def test_confirmation_intent(self) -> None:
         self.assertTrue(is_confirmation_intent("I took it"))
         self.assertTrue(is_confirmation_intent("yes I took my medicine"))

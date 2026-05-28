@@ -115,6 +115,8 @@ def medication_status_text(memory: MedicationMemory) -> str:
             f"{plan.medication_name}: {plan.frequency_per_day}x/day at {times} "
             f"for {plan.duration_days} days. Confirmed {confirmed}, pending {pending}, missed {missed}."
         )
+        if plan.advisory_note:
+            lines.append(f"Advisory: {plan.advisory_note}")
     sync = "0G sync pending" if memory.pending_sync else "0G sync current"
     if memory.last_sync_error:
         sync = f"{sync}; last sync error: {memory.last_sync_error}"

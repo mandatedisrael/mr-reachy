@@ -42,6 +42,11 @@ saved times. Sam does **not** prescribe, change dosage, validate medication
 instructions, identify pills as medical truth, or claim that someone swallowed a
 medicine.
 
+Sam may add a short non-prescriptive caveat when 0G intelligence or local safety
+rules detect a well-known concern. For example, if a user mentions ulcer history
+with naproxen, Sam can save the reminder while advising them to cross-check with
+a doctor or pharmacist.
+
 ## Setup
 
 Requires Python 3.10–3.13 (the mujoco deps don't support 3.14). We use [`uv`](https://docs.astral.sh/uv/).

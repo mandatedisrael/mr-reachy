@@ -49,6 +49,23 @@ NUMBER_WORDS = {
     "week": 7,
 }
 
+NSAID_NAMES = {
+    "aspirin",
+    "ibuprofen",
+    "ketoprofen",
+    "naproxen",
+    "diclofenac",
+    "meloxicam",
+    "celecoxib",
+    "indomethacin",
+    "piroxicam",
+}
+
+GI_RISK_WORDS = re.compile(
+    r"\b(ulcer|stomach bleeding|gi bleeding|gastrointestinal bleeding|black stool|bloody stool|heartburn|gastritis)\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class Dose:
@@ -98,6 +115,8 @@ class MedicationPlan:
     start_date: str
     created_at: str
     safety_note: str
+    advisory_note: str = ""
+    advisory_level: str = "routine"
     doses: list[Dose] = field(default_factory=list)
 
     @classmethod
@@ -112,6 +131,8 @@ class MedicationPlan:
             start_date=str(data.get("start_date") or date.today().isoformat()),
             created_at=str(data.get("created_at") or _now_iso()),
             safety_note=str(data.get("safety_note") or _safety_note()),
+            advisory_note=str(data.get("advisory_note") or ""),
+            advisory_level=str(data.get("advisory_level") or "routine"),
             doses=[Dose.from_dict(item) for item in data.get("doses") or []],
         )
 
@@ -126,6 +147,8 @@ class MedicationPlan:
             "start_date": self.start_date,
             "created_at": self.created_at,
             "safety_note": self.safety_note,
+            "advisory_note": self.advisory_note,
+            "advisory_level": self.advisory_level,
             "doses": [dose.to_dict() for dose in self.doses],
         }
 
@@ -218,6 +241,8 @@ def parse_medication_instruction(text: str, og=None, now: datetime | None = None
             frequency_per_day=int(data["frequency_per_day"]),
             duration_days=int(data["duration_days"]),
             dose_times=[str(item) for item in data.get("dose_times") or []],
+            advisory_note=str(data.get("advisory_note") or ""),
+            advisory_level=str(data.get("advisory_level") or "routine"),
             now=now,
         )
     except (KeyError, TypeError, ValueError):
@@ -235,6 +260,8 @@ def build_plan(
     frequency_per_day: int,
     duration_days: int,
     dose_times: list[str] | None = None,
+    advisory_note: str = "",
+    advisory_level: str = "routine",
     now: datetime | None = None,
 ) -> MedicationPlan:
     now = now or datetime.now().astimezone()
@@ -251,6 +278,13 @@ def build_plan(
     if len(normalized_times) != frequency_per_day:
         normalized_times = default_dose_times(frequency_per_day)
 
+    advisory_note, advisory_level = _advisory_for(
+        raw_instruction=raw_instruction,
+        medication_name=medication_name,
+        advisory_note=advisory_note,
+        advisory_level=advisory_level,
+    )
+
     plan_id = uuid.uuid4().hex
     start = now.date()
     plan = MedicationPlan(
@@ -263,6 +297,8 @@ def build_plan(
         start_date=start.isoformat(),
         created_at=_now_iso(now),
         safety_note=_safety_note(),
+        advisory_note=advisory_note,
+        advisory_level=advisory_level,
     )
     plan.doses = _make_doses(plan, start)
     return plan
@@ -279,12 +315,15 @@ def default_dose_times(frequency_per_day: int) -> list[str]:
 
 def plan_summary(plan: MedicationPlan) -> str:
     joined = ", ".join(_spoken_time(item) for item in plan.dose_times)
-    return (
+    summary = (
         f"I'll remind you to take {plan.medication_name} {plan.frequency_per_day} "
         f"time{'s' if plan.frequency_per_day != 1 else ''} per day at {joined} "
         f"for {plan.duration_days} day{'s' if plan.duration_days != 1 else ''}. "
         "Please follow your pharmacist's or doctor's instructions."
     )
+    if plan.advisory_note:
+        summary = f"{summary} {plan.advisory_note}"
+    return summary
 
 
 def _parse_with_og(text: str, og) -> dict[str, Any] | None:
@@ -292,10 +331,14 @@ def _parse_with_og(text: str, og) -> dict[str, Any] | None:
         return None
     prompt = (
         "Extract a medication reminder schedule from the user's words. Return ONLY JSON "
-        "with keys: accepted, medication_name, frequency_per_day, duration_days, dose_times, reason. "
+        "with keys: accepted, medication_name, frequency_per_day, duration_days, dose_times, "
+        "advisory_note, advisory_level, reason. "
         "Use accepted=false if the request asks for medical advice, is vague, lacks a medication name, "
         "or lacks frequency/duration. dose_times must be HH:MM strings or an empty list. "
-        "Do not invent medical advice."
+        "advisory_level must be routine, caution, or cross_check. advisory_note must be a short "
+        "non-prescriptive safety caveat, not medical advice. If the user mentions a risk context "
+        "such as ulcer plus an NSAID like naproxen, advise cross-checking with a doctor or pharmacist "
+        "before taking it while still extracting the reminder."
     )
     try:
         raw = og.complete_json(prompt, text, temperature=0.0)
@@ -319,6 +362,8 @@ def _parse_heuristic(text: str) -> dict[str, Any] | None:
         "frequency_per_day": frequency,
         "duration_days": duration,
         "dose_times": _find_times(text),
+        "advisory_note": "",
+        "advisory_level": "routine",
         "reason": "Parsed with local fallback.",
     }
 
@@ -436,3 +481,33 @@ def _spoken_time(value: str) -> str:
 
 def _safety_note() -> str:
     return "Reminder only. Follow pharmacist or doctor instructions."
+
+
+def _advisory_for(
+    *,
+    raw_instruction: str,
+    medication_name: str,
+    advisory_note: str,
+    advisory_level: str,
+) -> tuple[str, str]:
+    note = (advisory_note or "").strip()
+    level = advisory_level if advisory_level in {"routine", "caution", "cross_check"} else "routine"
+    med = medication_name.lower().strip()
+    raw = raw_instruction.lower()
+
+    if med in NSAID_NAMES and GI_RISK_WORDS.search(raw):
+        return (
+            f"Because you mentioned a stomach/ulcer concern with {med}, please cross-check "
+            "with your doctor or pharmacist before taking it. If they already confirmed it, "
+            "follow their label exactly.",
+            "cross_check",
+        )
+
+    if med in NSAID_NAMES and not note:
+        return (
+            f"Small reminder: {med} can upset the stomach for some people; follow the label, "
+            "and ask your pharmacist whether to take it with food or milk.",
+            "caution",
+        )
+
+    return note, level
