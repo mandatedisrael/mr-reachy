@@ -380,7 +380,7 @@ def _advisory_with_og(text: str, data: dict[str, Any], og) -> dict[str, Any] | N
     if not medication_name:
         return None
     prompt = (
-        "You generate a short medication reminder advisory for Sam, a reminder-only robot. "
+        "You generate a short medication routine advisory for Sam, an AI health companion robot. "
         "Use general medication knowledge from 0G intelligence and the user's stated context. "
         "Return ONLY JSON with keys: advisory_level and advisory_note. advisory_level must be "
         "routine, caution, or cross_check. advisory_note must be one short non-prescriptive caveat "

@@ -161,7 +161,8 @@ def describe(image_path: str | None) -> str:
 with gr.Blocks(title="Sam") as demo:
     gr.Markdown(
         "# Sam\n"
-        "A server-side Hugging Face demo for the Reachy Mini medication reminder companion powered by 0G Compute."
+        "A Reachy Mini AI health companion powered by 0G intelligence, with "
+        "fast local memory synced to 0G Storage."
     )
     gr.Markdown(f"**0G status:** {_status()}")
 
@@ -178,8 +179,8 @@ with gr.Blocks(title="Sam") as demo:
             lines=2,
         )
         medication_response = gr.Textbox(label="Sam", lines=4)
-        medication_status_box = gr.Textbox(label="Saved medication reminders", value=medication_status(), lines=8)
-        gr.Button("Add medication reminder").click(
+        medication_status_box = gr.Textbox(label="Saved health memory", value=medication_status(), lines=8)
+        gr.Button("Add to Sam's health plan").click(
             add_medication,
             inputs=medication_input,
             outputs=[medication_response, medication_status_box],
@@ -188,7 +189,7 @@ with gr.Blocks(title="Sam") as demo:
             confirm_medication,
             outputs=[medication_response, medication_status_box],
         )
-        gr.Button("Check due reminders").click(
+        gr.Button("Check due health actions").click(
             check_due_reminders,
             outputs=[medication_response, medication_status_box],
         )

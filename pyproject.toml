@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mr-reachy"
 version = "0.1.0"
-description = "Sam — a Reachy Mini medication reminder companion running on the 0G decentralized AI compute network."
+description = "Sam — a Reachy Mini AI health companion powered by 0G intelligence and 0G Storage memory."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 license = { text = "MIT" }

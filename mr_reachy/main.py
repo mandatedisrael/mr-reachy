@@ -392,7 +392,7 @@ def run_health_check(*, check_robot: bool, host: str | None, port: int) -> int:
 
 
 def cli(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="mr-reachy", description="Sam — medication reminder companion for Reachy Mini")
+    parser = argparse.ArgumentParser(prog="mr-reachy", description="Sam — AI health companion for Reachy Mini")
     parser.add_argument("--text", action="store_true", help="type messages instead of listening")
     parser.add_argument("--once", metavar="MSG", help="run a single exchange with MSG, then exit")
     parser.add_argument("--health-check", action="store_true",

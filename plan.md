@@ -1,20 +1,20 @@
-# Sam — Medication Reminder Companion (plan.md)
+# Sam — AI Health Companion (plan.md)
 
 ## Goal
-Sam is a **Reachy Mini medication reminder companion** built on the existing 0G robot stack. Sam listens to user-provided pharmacy instructions, creates a simple reminder schedule, saves that memory locally and to 0G Storage, reminds the user when doses are due, and accepts voice confirmation.
+Sam is a **Reachy Mini AI health companion** built on the existing 0G robot stack. Sam's first real workflow is medication support: it listens to user-provided pharmacy instructions, uses 0G intelligence to extract a safe routine and advisory context, saves health memory locally for fast access, syncs that memory to 0G Storage, reminds the user when doses are due, and accepts voice confirmation.
 
-Sam is a reminder assistant, **not** a medical advisor. It records what the user says the pharmacy or doctor gave them; it does not prescribe, change dosage, verify ingestion, or identify medication as medical truth.
+Sam is a health companion, **not** a medical advisor. It records what the user says the pharmacy or doctor gave them; it does not prescribe, change dosage, verify ingestion, or identify medication as medical truth.
 
 ## What already works
 1. **Listen** — capture mic audio and transcribe with 0G Whisper (`openai/whisper-large-v3`).
-2. **Think** — reason and reply with 0G chat (`zai-org/GLM-5-FP8`).
+2. **Think** — reason and reply with 0G intelligence through 0G chat (`zai-org/GLM-5-FP8`).
 3. **Speak** — local TTS in sim/dev and robot speaker support on hardware.
 4. **Express** — head pose and antennas convey emotion while listening/thinking/talking.
 5. **Run modes** — Hugging Face Gradio demo, local simulator, and Reachy Mini dashboard app.
 
 ## What to build
 1. **Medication parsing** — detect medication setup requests and extract safe structured schedules from natural language.
-2. **Hybrid memory** — local JSON as the fast runtime cache plus best-effort 0G Storage sync for durable memory.
+2. **Hybrid health memory** — local JSON as the fast runtime cache plus 0G Storage sync for durable memory.
 3. **Reminder engine** — background loop checks due doses, speaks reminders, and plays concerned/happy movements.
 4. **Confirmation flow** — user can say “I took it” to mark the active dose complete.
 5. **Missed dose state** — retry up to 3 times, then record the dose as missed for later caregiver escalation.

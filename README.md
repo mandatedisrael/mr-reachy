@@ -14,8 +14,11 @@ tags:
 
 # Sam
 
-Sam is a **Reachy Mini** medication reminder companion that runs its AI brain on
-the **0G decentralized compute network**. One control loop:
+Sam is a **Reachy Mini AI health companion** powered by **0G intelligence** and
+durable memory on **0G Storage**. Medication support is the first real workflow:
+Sam listens to pharmacy instructions, reasons over them with 0G Compute, keeps a
+local memory for fast retrieval, syncs that memory to 0G Storage, and acts on it
+through voice, movement, and reminders. One control loop:
 
 > **listen** (0G Whisper STT) → *optionally* **see** (0G Qwen3-VL) → **think**
 > (0G GLM-5 chat) → **speak** (local TTS) → **express** with head + antennas.
@@ -33,15 +36,15 @@ Runs identically in **MuJoCo simulation** and on physical hardware.
 | 👂 Speech-to-text | `openai/whisper-large-v3` | ✅ enabled |
 | 👁️ Vision | `qwen/qwen3-vl-30b-a3b-instruct` | ⚙️ code ready, **fund a sub-account to enable** |
 | 🗣️ Text-to-speech | local (`say` / `espeak`) | no 0G TTS provider yet |
-| 💊 Medication reminders | local JSON + 0G Storage sync | ✅ enabled |
+| 💊 Health plan + medication support | local JSON + 0G Storage sync | ✅ enabled |
 
 ## Medication safety
 
-Sam is a reminder assistant, not a doctor. It records medication instructions
-that the user says came from a pharmacist or doctor, then reminds the user at the
-saved times. Sam does **not** prescribe, change dosage, validate medication
-instructions, identify pills as medical truth, or claim that someone swallowed a
-medicine.
+Sam is a health companion, not a doctor. It records medication instructions that
+the user says came from a pharmacist or doctor, then uses 0G intelligence to add
+short, non-prescriptive safety context and uses 0G Storage as durable memory.
+Sam does **not** prescribe, change dosage, validate medication instructions,
+identify pills as medical truth, or claim that someone swallowed a medicine.
 
 Sam may add a short non-prescriptive caveat when 0G intelligence or local safety
 rules detect a well-known concern. For example, if a user mentions ulcer history
