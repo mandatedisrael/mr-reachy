@@ -71,6 +71,15 @@ GESTURES: dict[str, list[Frame]] = {
         _f(0.15, (0.9, 0.9), pitch=-18, z=14),
         _f(0.5, (0.7, 0.7), pitch=-10, z=8),
     ],
+    "dance": [
+        _f(0.18, (A_UP, A_DOWN), roll=-16, yaw=-14, z=8),
+        _f(0.18, (A_DOWN, A_UP), roll=16, yaw=14, z=8),
+        _f(0.18, (A_UP, A_UP), pitch=-12, z=14),
+        _f(0.18, (A_DOWN, A_DOWN), pitch=-2, z=4),
+        _f(0.22, (0.5, 0.5), yaw=-10),
+        _f(0.22, (0.5, 0.5), yaw=10),
+        _f(0.25),
+    ],
     "nod_yes": [
         _f(0.25, pitch=18),
         _f(0.25, pitch=-10),

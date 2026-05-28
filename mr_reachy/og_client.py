@@ -26,6 +26,7 @@ EMOTIONS = [
     "confused",
     "sad",
     "surprised",
+    "dance",
     "nod_yes",
     "shake_no",
 ]

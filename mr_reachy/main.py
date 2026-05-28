@@ -145,10 +145,9 @@ def run_conversation(
         expressions.go_rest(reachy)
     history: list[dict] = []
 
-    hint = " Press an antenna to talk." if backend.name == "robot" else ""
     greeting = Reply(
-        speech=f"Hi, I'm Sam, your medication reminder companion running on the 0G network.{hint} What's up?",
-        emotion="happy",
+        speech="Hi there! I'm Sam, your health buddy! It's so nice to meet you!",
+        emotion="dance",
     )
     print(f"  Sam [{greeting.emotion}]: {greeting.speech}")
     express_and_speak(reachy, greeting, backend=backend, voice=voice, speak=speak)
