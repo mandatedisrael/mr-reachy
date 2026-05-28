@@ -5,6 +5,7 @@ from datetime import datetime
 
 from mr_reachy.medication import (
     build_plan,
+    interval_dose_times,
     is_confirmation_intent,
     parse_medication_instruction,
 )
@@ -31,19 +32,25 @@ class FakeOG:
 
 
 class MedicationParsingTest(unittest.TestCase):
-    def test_three_times_per_day_defaults_to_three_daytime_slots(self) -> None:
+    def test_three_times_daily_without_start_time_asks_only_for_start(self) -> None:
         result = parse_medication_instruction(
             "Take metformin three times a day for five days.",
+            now=datetime(2026, 5, 28, 8, 0).astimezone(),
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertIn("What time is your first dose", result.reason)
+
+    def test_three_times_daily_from_start_time_schedules_eight_hourly(self) -> None:
+        result = parse_medication_instruction(
+            "Take metformin three times a day for five days starting 8am.",
             now=datetime(2026, 5, 28, 8, 0).astimezone(),
         )
 
         self.assertTrue(result.accepted)
         self.assertIsNotNone(result.plan)
         assert result.plan is not None
-        self.assertEqual(result.plan.medication_name.lower(), "metformin")
-        self.assertEqual(result.plan.frequency_per_day, 3)
-        self.assertEqual(result.plan.duration_days, 5)
-        self.assertEqual(result.plan.dose_times, ["09:00", "14:00", "20:00"])
+        self.assertEqual(result.plan.dose_times, ["08:00", "16:00", "00:00"])
         self.assertEqual(len(result.plan.doses), 15)
 
     def test_one_pill_every_morning_for_week(self) -> None:
@@ -57,6 +64,7 @@ class MedicationParsingTest(unittest.TestCase):
         assert result.plan is not None
         self.assertEqual(result.plan.frequency_per_day, 1)
         self.assertEqual(result.plan.duration_days, 7)
+        self.assertEqual(result.plan.dose_times, ["09:00"])
         self.assertEqual(len(result.plan.doses), 7)
 
     def test_vague_instruction_is_rejected(self) -> None:
@@ -67,7 +75,7 @@ class MedicationParsingTest(unittest.TestCase):
 
     def test_naproxen_with_ulcer_gets_cross_check_advisory(self) -> None:
         result = parse_medication_instruction(
-            "I have ulcer and they gave me naproxen twice a day for five days.",
+            "I have ulcer and they gave me naproxen twice a day for five days starting now.",
             now=datetime(2026, 5, 28, 8, 0).astimezone(),
         )
 
@@ -80,7 +88,7 @@ class MedicationParsingTest(unittest.TestCase):
 
     def test_naproxen_gets_general_stomach_caution(self) -> None:
         result = parse_medication_instruction(
-            "Take naproxen twice a day for five days.",
+            "Take naproxen twice a day for five days starting now.",
             now=datetime(2026, 5, 28, 8, 0).astimezone(),
         )
 
@@ -90,11 +98,27 @@ class MedicationParsingTest(unittest.TestCase):
         self.assertEqual(result.plan.advisory_level, "caution")
         self.assertIn("stomach", result.plan.advisory_note)
 
+    def test_at_night_maps_to_single_night_dose(self) -> None:
+        result = parse_medication_instruction(
+            "Take cetirizine at night for five days.",
+            now=datetime(2026, 5, 28, 8, 0).astimezone(),
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIsNotNone(result.plan)
+        assert result.plan is not None
+        self.assertEqual(result.plan.frequency_per_day, 1)
+        self.assertEqual(result.plan.dose_times, ["21:00"])
+
+    def test_interval_dose_times(self) -> None:
+        self.assertEqual(interval_dose_times("08:00", 3), ["08:00", "16:00", "00:00"])
+        self.assertEqual(interval_dose_times("06:00", 4), ["06:00", "12:00", "18:00", "00:00"])
+
     def test_og_advisory_is_not_limited_to_nsaids(self) -> None:
         og = FakeOG()
 
         result = parse_medication_instruction(
-            "They gave me prednisone once a day for five days.",
+            "They gave me prednisone once a day for five days starting now.",
             og=og,
             now=datetime(2026, 5, 28, 8, 0).astimezone(),
         )
@@ -105,7 +129,7 @@ class MedicationParsingTest(unittest.TestCase):
         self.assertEqual(result.plan.medication_name.lower(), "prednisone")
         self.assertEqual(result.plan.advisory_level, "caution")
         self.assertIn("prednisone", result.plan.advisory_note)
-        self.assertEqual(len(og.calls), 2)
+        self.assertEqual(len(og.calls), 1)
 
     def test_confirmation_intent(self) -> None:
         self.assertTrue(is_confirmation_intent("I took it"))

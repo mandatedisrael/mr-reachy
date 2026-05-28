@@ -16,10 +16,12 @@ from typing import Any
 
 DEFAULT_DOSE_TIMES = {
     1: ["09:00"],
-    2: ["09:00", "20:00"],
-    3: ["09:00", "14:00", "20:00"],
-    4: ["08:00", "12:00", "16:00", "20:00"],
+    2: ["00:00", "12:00"],
+    3: ["00:00", "08:00", "16:00"],
+    4: ["00:00", "06:00", "12:00", "18:00"],
 }
+
+START_TIME_REQUIRED = "__START_TIME_REQUIRED__"
 
 MEDICATION_INTENT = re.compile(
     r"\b(take|medicine|medication|drug|pill|tablet|capsule|pharmacy|pharmacist|dose|dosage)\b",
@@ -227,11 +229,17 @@ def parse_medication_instruction(text: str, og=None, now: datetime | None = None
             "I can help record reminders, but medication advice must come from your pharmacist or doctor.",
         )
 
-    data = _parse_with_og(text, og) or _parse_heuristic(text)
+    data = _parse_heuristic(text) or _parse_with_og(text, og)
     if not data:
         return MedicationParseResult(
             False,
-            "I could not safely understand the medication schedule. Please say the medicine name, times per day, and number of days.",
+            "I can set that up. When are you starting the first dose?",
+        )
+    if data.get("needs_start_time"):
+        return MedicationParseResult(
+            False,
+            f"Got it. I can set up {data['medication_name']} for {data['duration_days']} days, "
+            f"{data['frequency_per_day']} times daily. What time is your first dose?",
         )
 
     advisory = _advisory_with_og(text, data, og) if og is not None else None
@@ -318,6 +326,19 @@ def default_dose_times(frequency_per_day: int) -> list[str]:
     return [f"{round(first_hour + (step * idx)):02d}:00" for idx in range(frequency_per_day)]
 
 
+def interval_dose_times(first_time: str, frequency_per_day: int) -> list[str]:
+    parsed = time.fromisoformat(first_time)
+    interval_hours = 24 / frequency_per_day
+    values: list[str] = []
+    base_minutes = parsed.hour * 60 + parsed.minute
+    for idx in range(frequency_per_day):
+        minutes = round(base_minutes + (idx * interval_hours * 60)) % (24 * 60)
+        value = f"{minutes // 60:02d}:{minutes % 60:02d}"
+        if value not in values:
+            values.append(value)
+    return values
+
+
 def plan_summary(plan: MedicationPlan) -> str:
     joined = ", ".join(_spoken_time(item) for item in plan.dose_times)
     summary = (
@@ -396,12 +417,30 @@ def _parse_heuristic(text: str) -> dict[str, Any] | None:
     name = _find_medication_name(text)
     if not frequency or not duration or not name:
         return None
+    found_times = _find_times(text)
+    if len(found_times) == 1 and frequency > 1:
+        found_times = interval_dose_times(found_times[0], frequency)
+    elif not found_times:
+        start_time = _find_start_time(text)
+        if start_time == START_TIME_REQUIRED:
+            return {
+                "accepted": False,
+                "needs_start_time": True,
+                "medication_name": name,
+                "frequency_per_day": frequency,
+                "duration_days": duration,
+                "dose_times": [],
+                "advisory_note": "",
+                "advisory_level": "routine",
+                "reason": "Start time is needed.",
+            }
+        found_times = interval_dose_times(start_time, frequency)
     return {
         "accepted": True,
         "medication_name": name,
         "frequency_per_day": frequency,
         "duration_days": duration,
-        "dose_times": _find_times(text),
+        "dose_times": found_times,
         "advisory_note": "",
         "advisory_level": "routine",
         "reason": "Parsed with local fallback.",
@@ -421,14 +460,16 @@ def _extract_json(text: str) -> dict[str, Any] | None:
 
 def _find_frequency(text: str) -> int | None:
     lower = text.lower()
+    if re.search(r"\b(at night|nightly|every night|bedtime|every morning|once daily|once a day)\b", lower):
+        return 1
     match = re.search(r"(\d+)\s*(times?|x)\s*(a|per)?\s*day", lower)
     if match:
         return int(match.group(1))
     for word, value in NUMBER_WORDS.items():
-        if re.search(rf"\b{word}\b\s*(times?)?\s*(a|per)?\s*day", lower):
+        if word in {"once", "twice"} and re.search(rf"\b{word}\b\s*(a|per)?\s*day", lower):
             return value
-    if re.search(r"\bevery morning\b|\bonce daily\b|\bonce a day\b", lower):
-        return 1
+        if re.search(rf"\b{word}\b\s+times?\s*(a|per)?\s*day", lower):
+            return value
     return None
 
 
@@ -473,6 +514,24 @@ def _find_times(text: str) -> list[str]:
             hour_int = 0
         found.append(f"{hour_int:02d}:{int(minute or 0):02d}")
     return _normalize_times(found)
+
+
+def _find_start_time(text: str) -> str:
+    lower = text.lower()
+    explicit = _find_times(text)
+    if explicit:
+        return explicit[0]
+    if re.search(r"\b(start|starting|first dose|first one|begin|beginning)\b.*\b(now|today|immediately)\b", lower):
+        return datetime.now().astimezone().strftime("%H:%M")
+    if re.search(r"\b(at night|nightly|every night|bedtime)\b", lower):
+        return "21:00"
+    if re.search(r"\b(morning|every morning)\b", lower):
+        return "09:00"
+    if re.search(r"\b(afternoon)\b", lower):
+        return "14:00"
+    if re.search(r"\b(evening)\b", lower):
+        return "18:00"
+    return START_TIME_REQUIRED
 
 
 def _normalize_times(items: list[str]) -> list[str]:
