@@ -1,0 +1,429 @@
+"""Medication reminder domain for Sam.
+
+Sam records user-provided pharmacy instructions and turns them into reminder
+schedules. It does not validate, prescribe, or modify medication instructions.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
+from typing import Any
+
+
+DEFAULT_DOSE_TIMES = {
+    1: ["09:00"],
+    2: ["09:00", "20:00"],
+    3: ["09:00", "14:00", "20:00"],
+    4: ["08:00", "12:00", "16:00", "20:00"],
+}
+
+MEDICATION_INTENT = re.compile(
+    r"\b(take|medicine|medication|drug|pill|tablet|capsule|pharmacy|pharmacist|dose|dosage)\b",
+    re.IGNORECASE,
+)
+
+CONFIRMATION_INTENT = re.compile(
+    r"\b(i took it|i have taken it|done|taken|i took the medicine|i took my medicine|yes i took)\b",
+    re.IGNORECASE,
+)
+
+UNSAFE_MEDICAL_ADVICE = re.compile(
+    r"\b(should i|can i|is it safe|side effect|interaction|overdose|double dose|skip|change|increase|reduce)\b",
+    re.IGNORECASE,
+)
+
+NUMBER_WORDS = {
+    "one": 1,
+    "once": 1,
+    "two": 2,
+    "twice": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "week": 7,
+}
+
+
+@dataclass
+class Dose:
+    id: str
+    plan_id: str
+    scheduled_at: str
+    status: str = "pending"
+    reminder_count: int = 0
+    last_reminded_at: str | None = None
+    confirmed_at: str | None = None
+    missed_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Dose":
+        return cls(
+            id=str(data.get("id") or uuid.uuid4().hex),
+            plan_id=str(data.get("plan_id") or ""),
+            scheduled_at=str(data.get("scheduled_at") or ""),
+            status=str(data.get("status") or "pending"),
+            reminder_count=int(data.get("reminder_count") or 0),
+            last_reminded_at=data.get("last_reminded_at"),
+            confirmed_at=data.get("confirmed_at"),
+            missed_at=data.get("missed_at"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "plan_id": self.plan_id,
+            "scheduled_at": self.scheduled_at,
+            "status": self.status,
+            "reminder_count": self.reminder_count,
+            "last_reminded_at": self.last_reminded_at,
+            "confirmed_at": self.confirmed_at,
+            "missed_at": self.missed_at,
+        }
+
+
+@dataclass
+class MedicationPlan:
+    id: str
+    medication_name: str
+    raw_instruction: str
+    frequency_per_day: int
+    duration_days: int
+    dose_times: list[str]
+    start_date: str
+    created_at: str
+    safety_note: str
+    doses: list[Dose] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MedicationPlan":
+        return cls(
+            id=str(data.get("id") or uuid.uuid4().hex),
+            medication_name=str(data.get("medication_name") or "medicine"),
+            raw_instruction=str(data.get("raw_instruction") or ""),
+            frequency_per_day=int(data.get("frequency_per_day") or 1),
+            duration_days=int(data.get("duration_days") or 1),
+            dose_times=[str(item) for item in data.get("dose_times") or DEFAULT_DOSE_TIMES[1]],
+            start_date=str(data.get("start_date") or date.today().isoformat()),
+            created_at=str(data.get("created_at") or _now_iso()),
+            safety_note=str(data.get("safety_note") or _safety_note()),
+            doses=[Dose.from_dict(item) for item in data.get("doses") or []],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "medication_name": self.medication_name,
+            "raw_instruction": self.raw_instruction,
+            "frequency_per_day": self.frequency_per_day,
+            "duration_days": self.duration_days,
+            "dose_times": self.dose_times,
+            "start_date": self.start_date,
+            "created_at": self.created_at,
+            "safety_note": self.safety_note,
+            "doses": [dose.to_dict() for dose in self.doses],
+        }
+
+
+@dataclass
+class MedicationMemory:
+    plans: list[MedicationPlan] = field(default_factory=list)
+    updated_at: str = field(default_factory=lambda: _now_iso())
+    og_storage_root: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "MedicationMemory":
+        if not data:
+            return cls()
+        return cls(
+            plans=[MedicationPlan.from_dict(item) for item in data.get("plans") or []],
+            updated_at=str(data.get("updated_at") or _now_iso()),
+            og_storage_root=data.get("og_storage_root"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plans": [plan.to_dict() for plan in self.plans],
+            "updated_at": self.updated_at,
+            "og_storage_root": self.og_storage_root,
+        }
+
+    def active_pending_doses(self, now: datetime | None = None) -> list[Dose]:
+        now = now or datetime.now().astimezone()
+        doses: list[Dose] = []
+        for plan in self.plans:
+            for dose in plan.doses:
+                if dose.status == "pending" and _parse_dt(dose.scheduled_at) <= now:
+                    doses.append(dose)
+        return sorted(doses, key=lambda dose: dose.scheduled_at)
+
+    def plan_for_dose(self, dose_id: str) -> MedicationPlan | None:
+        for plan in self.plans:
+            if any(dose.id == dose_id for dose in plan.doses):
+                return plan
+        return None
+
+
+@dataclass
+class MedicationParseResult:
+    accepted: bool
+    reason: str
+    plan: MedicationPlan | None = None
+
+
+def is_medication_intent(text: str) -> bool:
+    return bool(MEDICATION_INTENT.search(text or ""))
+
+
+def is_confirmation_intent(text: str) -> bool:
+    return bool(CONFIRMATION_INTENT.search(text or ""))
+
+
+def parse_medication_instruction(text: str, og=None, now: datetime | None = None) -> MedicationParseResult:
+    """Parse a user-provided medication reminder request into a plan."""
+    text = (text or "").strip()
+    if not text:
+        return MedicationParseResult(False, "I need the medication instructions first.")
+    if UNSAFE_MEDICAL_ADVICE.search(text):
+        return MedicationParseResult(
+            False,
+            "I can help record reminders, but medication advice must come from your pharmacist or doctor.",
+        )
+
+    data = _parse_with_og(text, og) or _parse_heuristic(text)
+    if not data:
+        return MedicationParseResult(
+            False,
+            "I could not safely understand the medication schedule. Please say the medicine name, times per day, and number of days.",
+        )
+
+    try:
+        plan = build_plan(
+            raw_instruction=text,
+            medication_name=str(data["medication_name"]).strip(),
+            frequency_per_day=int(data["frequency_per_day"]),
+            duration_days=int(data["duration_days"]),
+            dose_times=[str(item) for item in data.get("dose_times") or []],
+            now=now,
+        )
+    except (KeyError, TypeError, ValueError):
+        return MedicationParseResult(
+            False,
+            "I could not safely understand the medication schedule. Please say the medicine name, times per day, and number of days.",
+        )
+    return MedicationParseResult(True, "Medication reminder saved.", plan)
+
+
+def build_plan(
+    *,
+    raw_instruction: str,
+    medication_name: str,
+    frequency_per_day: int,
+    duration_days: int,
+    dose_times: list[str] | None = None,
+    now: datetime | None = None,
+) -> MedicationPlan:
+    now = now or datetime.now().astimezone()
+    if not medication_name or medication_name.lower() in {"it", "this", "medicine", "medication", "drug"}:
+        raise ValueError("Medication name is too vague.")
+    if frequency_per_day < 1 or frequency_per_day > 6:
+        raise ValueError("Frequency must be between 1 and 6 times per day.")
+    if duration_days < 1 or duration_days > 60:
+        raise ValueError("Duration must be between 1 and 60 days.")
+
+    normalized_times = _normalize_times(dose_times or [])
+    if not normalized_times:
+        normalized_times = default_dose_times(frequency_per_day)
+    if len(normalized_times) != frequency_per_day:
+        normalized_times = default_dose_times(frequency_per_day)
+
+    plan_id = uuid.uuid4().hex
+    start = now.date()
+    plan = MedicationPlan(
+        id=plan_id,
+        medication_name=medication_name,
+        raw_instruction=raw_instruction,
+        frequency_per_day=frequency_per_day,
+        duration_days=duration_days,
+        dose_times=normalized_times,
+        start_date=start.isoformat(),
+        created_at=_now_iso(now),
+        safety_note=_safety_note(),
+    )
+    plan.doses = _make_doses(plan, start)
+    return plan
+
+
+def default_dose_times(frequency_per_day: int) -> list[str]:
+    if frequency_per_day in DEFAULT_DOSE_TIMES:
+        return list(DEFAULT_DOSE_TIMES[frequency_per_day])
+    first_hour = 8
+    last_hour = 20
+    step = (last_hour - first_hour) / max(frequency_per_day - 1, 1)
+    return [f"{round(first_hour + (step * idx)):02d}:00" for idx in range(frequency_per_day)]
+
+
+def plan_summary(plan: MedicationPlan) -> str:
+    joined = ", ".join(_spoken_time(item) for item in plan.dose_times)
+    return (
+        f"I'll remind you to take {plan.medication_name} {plan.frequency_per_day} "
+        f"time{'s' if plan.frequency_per_day != 1 else ''} per day at {joined} "
+        f"for {plan.duration_days} day{'s' if plan.duration_days != 1 else ''}. "
+        "Please follow your pharmacist's or doctor's instructions."
+    )
+
+
+def _parse_with_og(text: str, og) -> dict[str, Any] | None:
+    if og is None or not getattr(og, "chat_enabled", False):
+        return None
+    prompt = (
+        "Extract a medication reminder schedule from the user's words. Return ONLY JSON "
+        "with keys: accepted, medication_name, frequency_per_day, duration_days, dose_times, reason. "
+        "Use accepted=false if the request asks for medical advice, is vague, lacks a medication name, "
+        "or lacks frequency/duration. dose_times must be HH:MM strings or an empty list. "
+        "Do not invent medical advice."
+    )
+    try:
+        raw = og.complete_json(prompt, text, temperature=0.0)
+        data = _extract_json(raw)
+    except Exception:
+        return None
+    if not data or data.get("accepted") is False:
+        return None
+    return data
+
+
+def _parse_heuristic(text: str) -> dict[str, Any] | None:
+    frequency = _find_frequency(text)
+    duration = _find_duration(text)
+    name = _find_medication_name(text)
+    if not frequency or not duration or not name:
+        return None
+    return {
+        "accepted": True,
+        "medication_name": name,
+        "frequency_per_day": frequency,
+        "duration_days": duration,
+        "dose_times": _find_times(text),
+        "reason": "Parsed with local fallback.",
+    }
+
+
+def _extract_json(text: str) -> dict[str, Any] | None:
+    match = re.search(r"\{.*\}", text or "", re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _find_frequency(text: str) -> int | None:
+    lower = text.lower()
+    match = re.search(r"(\d+)\s*(times?|x)\s*(a|per)?\s*day", lower)
+    if match:
+        return int(match.group(1))
+    for word, value in NUMBER_WORDS.items():
+        if re.search(rf"\b{word}\b\s*(times?)?\s*(a|per)?\s*day", lower):
+            return value
+    if re.search(r"\bevery morning\b|\bonce daily\b|\bonce a day\b", lower):
+        return 1
+    return None
+
+
+def _find_duration(text: str) -> int | None:
+    lower = text.lower()
+    if re.search(r"\bfor\s+(a|one)\s+week\b", lower):
+        return 7
+    if re.search(r"\bfor\s+(a|one)\s+day\b", lower):
+        return 1
+    match = re.search(r"for\s+(\d+)\s*(days?|weeks?)", lower)
+    if match:
+        value = int(match.group(1))
+        return value * 7 if match.group(2).startswith("week") else value
+    for word, value in NUMBER_WORDS.items():
+        match = re.search(rf"for\s+{word}\s*(days?|weeks?)", lower)
+        if match:
+            return value * 7 if match.group(1).startswith("week") else value
+    return None
+
+
+def _find_medication_name(text: str) -> str | None:
+    match = re.search(
+        r"\b(?:take|given me|gave me|use)\s+(?:my\s+|the\s+)?([a-zA-Z][a-zA-Z0-9_-]{2,})",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    name = match.group(1).strip(" .,")
+    if name.lower() in {"this", "that", "medicine", "medication", "drug", "pill", "tablet", "capsule"}:
+        return None
+    return name
+
+
+def _find_times(text: str) -> list[str]:
+    found: list[str] = []
+    for hour, minute, ampm in re.findall(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", text, re.IGNORECASE):
+        hour_int = int(hour)
+        if ampm.lower() == "pm" and hour_int != 12:
+            hour_int += 12
+        if ampm.lower() == "am" and hour_int == 12:
+            hour_int = 0
+        found.append(f"{hour_int:02d}:{int(minute or 0):02d}")
+    return _normalize_times(found)
+
+
+def _normalize_times(items: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for item in items:
+        try:
+            parsed = time.fromisoformat(item)
+        except ValueError:
+            continue
+        value = f"{parsed.hour:02d}:{parsed.minute:02d}"
+        if value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def _make_doses(plan: MedicationPlan, start: date) -> list[Dose]:
+    doses: list[Dose] = []
+    for day_offset in range(plan.duration_days):
+        current = start + timedelta(days=day_offset)
+        for dose_time in plan.dose_times:
+            scheduled = datetime.combine(current, time.fromisoformat(dose_time)).astimezone()
+            doses.append(
+                Dose(
+                    id=uuid.uuid4().hex,
+                    plan_id=plan.id,
+                    scheduled_at=scheduled.isoformat(),
+                )
+            )
+    return doses
+
+
+def _parse_dt(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def _now_iso(now: datetime | None = None) -> str:
+    return (now or datetime.now().astimezone()).isoformat()
+
+
+def _spoken_time(value: str) -> str:
+    parsed = time.fromisoformat(value)
+    suffix = "AM" if parsed.hour < 12 else "PM"
+    hour = parsed.hour % 12 or 12
+    return f"{hour}:{parsed.minute:02d} {suffix}"
+
+
+def _safety_note() -> str:
+    return "Reminder only. Follow pharmacist or doctor instructions."

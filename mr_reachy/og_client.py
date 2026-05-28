@@ -96,6 +96,21 @@ class OGClient:
         )
         return self._parse(resp.choices[0].message.content or "")
 
+    def complete_json(self, system_prompt: str, user_text: str, *, temperature: float = 0.0) -> str:
+        """Return raw model text for strict JSON extraction tasks."""
+        if self._chat is None:
+            raise RuntimeError("Chat service is not configured (check OG_CHAT_* in .env).")
+        resp = self._chat.chat.completions.create(
+            model=self.settings.chat.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text},
+            ],
+            max_tokens=400,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content or ""
+
     @staticmethod
     def _parse(text: str) -> Reply:
         match = re.search(r"\{.*\}", text, re.DOTALL)
