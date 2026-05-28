@@ -7,11 +7,18 @@ import gradio as gr
 from openai import OpenAIError
 
 from mr_reachy.config import load_settings
+from mr_reachy.medication import is_confirmation_intent, is_medication_intent, parse_medication_instruction, plan_summary
 from mr_reachy.og_client import OGClient
+from mr_reachy.reminders import confirm_due_dose, medication_status_text, process_due_reminders
+from mr_reachy.storage import build_medication_store
 
 
 def _build_client() -> OGClient:
     return OGClient(load_settings())
+
+
+def _build_store():
+    return build_medication_store(load_settings().storage)
 
 
 def _status() -> str:
@@ -45,6 +52,21 @@ def _history_for_og(history: list) -> list[dict[str, str]]:
 
 def chat(message: str, history: list) -> str:
     client = _build_client()
+    store = _build_store()
+
+    if is_confirmation_intent(message):
+        confirmed, response = confirm_due_dose(store)
+        return f"{response}\n\nEmotion: {'happy' if confirmed else 'curious'}"
+
+    if is_medication_intent(message):
+        result = parse_medication_instruction(message, client)
+        if result.accepted and result.plan is not None:
+            memory = store.load()
+            memory.plans.append(result.plan)
+            store.save(memory)
+            return f"{plan_summary(result.plan)}\n\nEmotion: happy"
+        return f"{result.reason}\n\nEmotion: confused"
+
     if not client.chat_enabled:
         return (
             "0G chat is not configured yet. Add OG_CHAT_BASE_URL, OG_CHAT_MODEL, "
@@ -60,6 +82,42 @@ def chat(message: str, history: list) -> str:
     except Exception as exc:
         return f"Sam hit an unexpected chat error: {exc}"
     return f"{reply.speech}\n\nEmotion: {reply.emotion}"
+
+
+def add_medication(instruction: str) -> tuple[str, str]:
+    client = _build_client()
+    store = _build_store()
+    result = parse_medication_instruction(instruction, client)
+    if not result.accepted or result.plan is None:
+        return result.reason, medication_status_text(store.load())
+    memory = store.load()
+    memory.plans.append(result.plan)
+    store.save(memory)
+    return plan_summary(result.plan), medication_status_text(memory)
+
+
+def confirm_medication() -> tuple[str, str]:
+    store = _build_store()
+    confirmed, response = confirm_due_dose(store)
+    emotion = "happy" if confirmed else "curious"
+    return f"{response}\n\nEmotion: {emotion}", medication_status_text(store.load())
+
+
+def check_due_reminders() -> tuple[str, str]:
+    store = _build_store()
+    replies = []
+    changed = process_due_reminders(store=store, notify=replies.append)
+    if replies:
+        response = "\n\n".join(f"{reply.speech}\nEmotion: {reply.emotion}" for reply in replies)
+    elif changed:
+        response = "Medication reminders were updated."
+    else:
+        response = "No medication dose is due right now."
+    return response, medication_status_text(store.load())
+
+
+def medication_status() -> str:
+    return medication_status_text(_build_store().load())
 
 
 def transcribe(audio_path: str | None) -> str:
@@ -112,6 +170,32 @@ with gr.Blocks(title="Sam") as demo:
         title="Talk to Sam",
         description="Chat calls 0G from the Space backend, so API keys stay private.",
     )
+
+    with gr.Tab("Medication Plan"):
+        medication_input = gr.Textbox(
+            label="Pharmacy instruction",
+            placeholder="Example: Take metformin three times a day for five days.",
+            lines=2,
+        )
+        medication_response = gr.Textbox(label="Sam", lines=4)
+        medication_status_box = gr.Textbox(label="Saved medication reminders", value=medication_status(), lines=8)
+        gr.Button("Add medication reminder").click(
+            add_medication,
+            inputs=medication_input,
+            outputs=[medication_response, medication_status_box],
+        )
+        gr.Button("I took it").click(
+            confirm_medication,
+            outputs=[medication_response, medication_status_box],
+        )
+        gr.Button("Check due reminders").click(
+            check_due_reminders,
+            outputs=[medication_response, medication_status_box],
+        )
+        gr.Button("Refresh medication plan").click(
+            medication_status,
+            outputs=medication_status_box,
+        )
 
     with gr.Tab("Speech-to-text"):
         audio = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Audio")
