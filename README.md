@@ -32,6 +32,15 @@ Runs identically in **MuJoCo simulation** and on physical hardware.
 | 👂 Speech-to-text | `openai/whisper-large-v3` | ✅ enabled |
 | 👁️ Vision | `qwen/qwen3-vl-30b-a3b-instruct` | ⚙️ code ready, **fund a sub-account to enable** |
 | 🗣️ Text-to-speech | local (`say` / `espeak`) | no 0G TTS provider yet |
+| 💊 Medication reminders | local JSON + 0G Storage sync | ✅ enabled |
+
+## Medication safety
+
+Sam is a reminder assistant, not a doctor. It records medication instructions
+that the user says came from a pharmacist or doctor, then reminds the user at the
+saved times. Sam does **not** prescribe, change dosage, validate medication
+instructions, identify pills as medical truth, or claim that someone swallowed a
+medicine.
 
 ## Setup
 
@@ -76,6 +85,24 @@ OG_STT_API_KEY
 Add `OG_VISION_*` too once the vision provider is funded. Rebuild the Space after
 changing secrets.
 
+### Sam medication memory
+
+Sam reads and writes medication memory locally first so reminders are fast and
+reliable. When 0G Storage is configured, every local change is marked for sync
+and a background sync keeps retrying until 0G Storage has the latest memory.
+
+```text
+SAM_MEMORY_PATH=/path/to/sam_memory.json
+OG_STORAGE_ENABLED=true
+OG_STORAGE_INDEXER_URL=...
+OG_STORAGE_RPC_URL=...
+OG_STORAGE_PRIVATE_KEY=...
+OG_STORAGE_MEMORY_ROOT=...
+```
+
+`OG_STORAGE_PRIVATE_KEY` must be a secret. If 0G Storage is unavailable, Sam
+continues from local JSON and keeps the memory marked as pending sync.
+
 ## Run
 
 **1. Start the sim daemon** (separate terminal). On macOS use `--no-media`
@@ -107,6 +134,16 @@ python -m mr_reachy
 
 Say "what do you see?" to trigger the vision path (once a vision sub-account is funded).
 Say "bye" / type `quit` to exit.
+
+Medication demo phrases:
+
+```text
+Sam, I need to take metformin three times a day for five days.
+I took it.
+```
+
+If the user does not provide exact times, Sam uses safe default reminder slots:
+`09:00`, `14:00`, and `20:00` for three-times-per-day schedules.
 
 ## On the robot (demo station — Reachy Mini Wireless)
 
@@ -180,6 +217,9 @@ For an explicit network connection use `connection_mode="network"`.
 mr_reachy/
   main.py        # ReachyMiniApp + conversation loop + CLI
   og_client.py   # 0G Compute: chat / STT / vision (OpenAI-compatible)
+  medication.py  # medication plans, doses, parser, confirmation intent
+  storage.py     # local JSON cache + background 0G Storage sync
+  reminders.py   # due-dose reminder loop + confirmation/missed-dose handling
   io_backends.py # Local (laptop) vs Robot (onboard media + antenna push-to-talk)
   tts.py         # on-device speech synthesis (Piper / say / espeak)
   expressions.py # emotion -> head pose + antenna gestures
@@ -188,3 +228,10 @@ mr_reachy/
 ```
 
 See `plan.md` for the design and `agents.local.md` for environment notes.
+
+## Validation
+
+```bash
+python -m unittest tests.test_medication tests.test_storage tests.test_reminders
+python -m py_compile app.py mr_reachy/main.py mr_reachy/medication.py mr_reachy/storage.py mr_reachy/reminders.py
+```

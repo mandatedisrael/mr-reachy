@@ -34,6 +34,13 @@
   `0g-compute-cli transfer-fund ... && 0g-compute-cli inference get-secret --provider <vision>`.
 - **Mainnet = real funds.** Every chat/STT call spends a tiny amount of real 0G.
 
+## Sam medication memory
+- Local JSON is the operational memory and first read/write path (`SAM_MEMORY_PATH`).
+- 0G Storage is the durable sync target (`OG_STORAGE_*`). Sync is background and retryable:
+  failed uploads leave `pending_sync=true` in the local memory file.
+- Safety stance: Sam is reminder-only. It stores user-provided instructions but does not
+  prescribe, change dosage, verify ingestion, or provide medical advice.
+
 ## Safety envelope (SDK clamps; gestures stay well inside)
 head pitch/roll +/-40 deg, head yaw +/-180 deg, body yaw +/-160 deg, |head-body yaw| <= 65 deg.
 
@@ -51,4 +58,5 @@ With that, the app passes all checks (entry point `mr-reachy = mr_reachy.main:Mr
 source .venv/bin/activate
 python -m mr_reachy --health-check --no-robot
 python -m mr_reachy --once "I am so happy" --no-robot --no-speak
+python -m mr_reachy --once "Sam, I need to take metformin three times a day for five days" --no-robot --no-speak
 ```
