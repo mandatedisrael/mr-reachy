@@ -7,6 +7,7 @@ sdk: gradio
 app_file: app.py
 pinned: false
 tags:
+  - 0g-hackathon
   - reachy_mini
   - reachy_mini_python_app
 ---
